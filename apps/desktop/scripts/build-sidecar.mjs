@@ -81,6 +81,7 @@ try {
         TIKTOKEN_CACHE_DIR: tiktokenCacheRoot,
       },
       stdio: "inherit",
+      timeout: 120_000,
     },
   );
   if (cacheResult.error) {
@@ -119,6 +120,10 @@ try {
         "--collect-data",
         packageName,
       ]),
+      "--copy-metadata",
+      "en-core-web-sm",
+      "--copy-metadata",
+      "qdrant-client",
       ...requiredSidecarDataDirectories.flatMap(({ source, destination }) => [
         "--add-data",
         `${path.join(desktopRoot, source)}:${destination}`,

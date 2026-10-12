@@ -42,9 +42,11 @@ _TITLE_MARKER_RE = re.compile(r"(?:^\s*#|\s:::\s|@!START@|@!END@)", re.IGNORECAS
 def candidate_polarity_signal(question: str, text: str) -> str:
     proposition = build_question_proposition(question)
     required_object_tokens = canonical_proposition_object_token_set(proposition)
+    semantics = revalidated_selector_semantics({}, question, text)
+    if semantics["polarity_signal"] in {"support", "explicit_contradiction"}:
+        return str(semantics["polarity_signal"])
     if not required_object_tokens <= semantic_content_token_set(text):
         return "undetermined"
-    semantics = revalidated_selector_semantics({}, question, text)
     return str(semantics["polarity_signal"])
 
 

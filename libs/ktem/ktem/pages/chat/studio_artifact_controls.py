@@ -263,6 +263,11 @@ def generate_studio_artifact_panel_update(
 
     if str(artifact_type or "").strip() == "mindmap":
         try:
+            if request is not _DIRECT_CALL_REQUEST:
+                values = {
+                    **values,
+                    "selected_inputs": page._build_selected_input_map(*selecteds),
+                }
             return generate_studio_mindmap_outputs(
                 page,
                 values,

@@ -1,6 +1,6 @@
 param(
     [string]$VenvPath = ".venv",
-    [string]$Python = "3.10",
+    [string]$Python = "3.11",
     [switch]$SkipInit,
     [switch]$InstallCodex,
     [switch]$InstallClaudeCode

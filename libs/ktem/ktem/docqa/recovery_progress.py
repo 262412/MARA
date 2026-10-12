@@ -157,16 +157,76 @@ def semantic_recovery_has_progress(
     *,
     request: Any | None = None,
 ) -> bool:
-    pack_before = semantic_recovery_pack_digest(request, initial_bundle)
-    pack_after = semantic_recovery_pack_digest(request, recovered_bundle)
-    slot_before = normalized_slot_state_digest(initial_bundle, before_slots)
-    slot_after = normalized_slot_state_digest(recovered_bundle, after_slots)
-    binding_before = canonical_proposition_binding_digest(request, initial_bundle)
-    binding_after = canonical_proposition_binding_digest(request, recovered_bundle)
-    return (
-        bool(pack_before and pack_after and pack_before != pack_after)
-        or bool(slot_before and slot_after and slot_before != slot_after)
-        or bool(binding_before and binding_after and binding_before != binding_after)
+    before_states = semantic_progress_slot_states(initial_bundle, before_slots)
+    after_states = semantic_progress_slot_states(recovered_bundle, after_slots)
+    before_slot_ids = {
+        evidence_id for state in before_states for evidence_id in state["evidence_ids"]
+    }
+    after_slot_ids = {
+        evidence_id for state in after_states for evidence_id in state["evidence_ids"]
+    }
+    before_ids = set(semantic_progress_evidence_ids(initial_bundle))
+    after_ids = set(semantic_progress_evidence_ids(recovered_bundle))
+    if (after_ids - before_ids) & (after_slot_ids - before_slot_ids):
+        return True
+    if before_states != after_states and (before_states or after_states):
+        return True
+    if initial_bundle is None and recovered_bundle is not None:
+        return bool(
+            semantic_recovery_pack_digest(request, recovered_bundle)
+            or canonical_proposition_binding_digest(request, recovered_bundle)
+            or after_states
+        )
+    return False
+
+
+def recovery_has_progress(fields: dict[str, Any]) -> bool:
+    """Return whether recovery changed authoritative semantic state."""
+
+    new_semantic_ids = {
+        str(value).strip()
+        for value in fields.get("new_semantic_evidence_ids") or []
+        if str(value).strip()
+    }
+    after_slot_ids = {
+        str(evidence_id).strip()
+        for state in fields.get("semantic_slot_states_after") or []
+        for evidence_id in state.get("evidence_ids") or []
+        if str(evidence_id).strip()
+    }
+    if new_semantic_ids & after_slot_ids:
+        return True
+    if fields.get("semantic_slot_state_changed") is True:
+        return True
+    if fields.get("normalized_slot_state_digest_changed") is True:
+        return True
+    if fields.get("slot_state_digest_changed") is True:
+        return True
+    return any(
+        fields.get(applicable_key) is True
+        and fields.get(changed_key) is True
+        and not fields.get(before_key)
+        and fields.get(after_key)
+        for applicable_key, changed_key, before_key, after_key in (
+            (
+                "canonical_proposition_binding_digest_applicable",
+                "canonical_proposition_binding_digest_changed",
+                "canonical_proposition_binding_digest_before",
+                "canonical_proposition_binding_digest_after",
+            ),
+            (
+                "proposition_binding_digest_applicable",
+                "proposition_binding_digest_changed",
+                "proposition_binding_digest_before",
+                "proposition_binding_digest_after",
+            ),
+            (
+                "semantic_pack_digest_applicable",
+                "semantic_pack_digest_changed",
+                "semantic_pack_digest_before",
+                "semantic_pack_digest_after",
+            ),
+        )
     )
 
 

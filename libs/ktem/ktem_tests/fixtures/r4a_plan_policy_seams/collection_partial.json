@@ -1,0 +1,4007 @@
+{
+ "source": "e40dc0a18ef57d251a2931ce85553e22ee145798",
+ "pythonhashseed": "0",
+ "observation": {
+  "calls": [
+   {
+    "stage": "retrieve",
+    "round": 1,
+    "slot": "operand:revolving_credit_capacity:2023",
+    "query": "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023",
+    "route": "text_rag",
+    "budget": {
+     "max_items": 16,
+     "max_pages": 6
+    }
+   },
+   {
+    "stage": "retrieve",
+    "round": 2,
+    "slot": "operand:revolving_credit_capacity:2023",
+    "query": "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023 revolving credit capacity 2023 revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023 As of May 26, 2023, what is the total amount PepsiCo may borrow under its unsecured revolving credit agreements? distinct facility identity active agreement exclude bound facility exclude facility identity 364_day",
+    "route": "text_rag",
+    "budget": {
+     "max_items": 16,
+     "max_pages": 6
+    }
+   }
+  ],
+  "planned": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:4406d7a9bd72a1f73cda",
+   "answer_type": "numeric",
+   "question_type": "numeric",
+   "subqueries": [
+    "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023"
+   ],
+   "evidence_slots": [
+    {
+     "slot_id": "operand:revolving_credit_capacity:2023",
+     "role": "operand",
+     "entity": "active_at:2023-05-26",
+     "metric": "revolving credit capacity",
+     "period": "2023",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "",
+     "financial_scope": "",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": true,
+     "required_for_verification": true,
+     "status": "missing",
+     "evidence_ids": [],
+     "cardinality": 2,
+     "operator_role": "collection",
+     "query": "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023",
+     "locator": {}
+    }
+   ],
+   "constraints": {
+    "periods": [
+     "2023"
+    ],
+    "verification_domain": "finance",
+    "requires_visual": false,
+    "requires_multiple_evidence": false,
+    "requires_distinct_source_pages": false,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": []
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": false,
+    "requires_structure": true,
+    "finance_formula_status": "not_applicable"
+   },
+   "max_retrieval_rounds": 2
+  },
+  "final_plan": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:4406d7a9bd72a1f73cda",
+   "answer_type": "numeric",
+   "question_type": "numeric",
+   "subqueries": [
+    "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023"
+   ],
+   "evidence_slots": [
+    {
+     "slot_id": "operand:revolving_credit_capacity:2023",
+     "role": "operand",
+     "entity": "active_at:2023-05-26",
+     "metric": "revolving credit capacity",
+     "period": "2023",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "",
+     "financial_scope": "",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": true,
+     "required_for_verification": true,
+     "status": "retrieved_partial",
+     "evidence_ids": [
+      "span:pepsico:1"
+     ],
+     "cardinality": 2,
+     "operator_role": "collection",
+     "query": "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023",
+     "locator": {}
+    }
+   ],
+   "constraints": {
+    "periods": [
+     "2023"
+    ],
+    "verification_domain": "finance",
+    "requires_visual": false,
+    "requires_multiple_evidence": false,
+    "requires_distinct_source_pages": false,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": []
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": false,
+    "requires_structure": true,
+    "finance_formula_status": "not_applicable",
+    "question": "As of May 26, 2023, what is the total amount PepsiCo may borrow under its unsecured revolving credit agreements?"
+   },
+   "max_retrieval_rounds": 2
+  },
+  "plan_id": "plan:4406d7a9bd72a1f73cda",
+  "state_version": 4,
+  "bound": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:4406d7a9bd72a1f73cda",
+   "answer_type": "numeric",
+   "question_type": "numeric",
+   "subqueries": [
+    "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023"
+   ],
+   "evidence_slots": [
+    {
+     "slot_id": "operand:revolving_credit_capacity:2023",
+     "role": "operand",
+     "entity": "active_at:2023-05-26",
+     "metric": "revolving credit capacity",
+     "period": "2023",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "",
+     "financial_scope": "",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": true,
+     "required_for_verification": true,
+     "status": "retrieved_partial",
+     "evidence_ids": [
+      "span:pepsico:1"
+     ],
+     "cardinality": 2,
+     "operator_role": "collection",
+     "query": "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023",
+     "locator": {}
+    }
+   ],
+   "constraints": {
+    "periods": [
+     "2023"
+    ],
+    "verification_domain": "finance",
+    "requires_visual": false,
+    "requires_multiple_evidence": false,
+    "requires_distinct_source_pages": false,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": []
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": false,
+    "requires_structure": true,
+    "finance_formula_status": "not_applicable",
+    "question": "As of May 26, 2023, what is the total amount PepsiCo may borrow under its unsecured revolving credit agreements?"
+   },
+   "max_retrieval_rounds": 2,
+   "binding_trace": [
+    {
+     "slot_id": "operand:revolving_credit_capacity:2023",
+     "preserved_existing_binding": false,
+     "replacement_reason": "incomplete_existing_binding",
+     "before_identity": "span:pepsico:1",
+     "after_identity": "span:pepsico:1"
+    }
+   ],
+   "state_version": 4
+  },
+  "controller": {
+   "route": "text_rag",
+   "legacy_route": "doc_text",
+   "policy": "doc",
+   "controller_mode": "off",
+   "requires_retrieval": true,
+   "reason": "Requested document text route."
+  },
+  "retrieval": {
+   "status": "poor",
+   "reason": "Retrieved evidence does not fill 1 required QueryPlan slot(s). stop_reason=max_retrieval_rounds_exhausted.",
+   "retry": false
+  },
+  "verification": {
+   "mode": "light",
+   "status": "not_enough_evidence",
+   "reason": "Verification-required evidence slots are missing: operand:revolving_credit_capacity:2023",
+   "action": "abstain",
+   "claims": [],
+   "unsupported_claims": [],
+   "unknown_claims": [],
+   "verified_citations": [],
+   "claim_results": [],
+   "input_answer_polarity": "",
+   "canonical_answer_polarity": "",
+   "semantic_correction_applied": false,
+   "boolean_authority_status": "",
+   "authoritative_evidence_id": "",
+   "authoritative_evidence_ref": "",
+   "authoritative_span_id": "",
+   "authoritative_quote": "",
+   "authoritative_span_start": null,
+   "authoritative_span_end": null,
+   "authoritative_canonical_start": null,
+   "authoritative_canonical_end": null,
+   "actor": "",
+   "section_scope": "",
+   "relation": "",
+   "object": "",
+   "predicate_arguments": {
+    "__tuple__": []
+   },
+   "qualifier": "",
+   "quantifier": "",
+   "verified_support_slot_ids": [],
+   "authority_derivations": [],
+   "selected_derivation_id": "",
+   "authoritative_conflict": {},
+   "typed_authority": {},
+   "candidate_contract_id": "",
+   "candidate_label": "",
+   "verifier_input_candidate": "",
+   "verifier_candidate_status": "",
+   "replacement_candidate_allowed": false,
+   "predicate": "",
+   "arguments": [],
+   "scope": ""
+  },
+  "guardrail": {
+   "status": "not_enough_evidence",
+   "action": "abstain",
+   "reason": "Retrieved evidence does not fill 1 required QueryPlan slot(s). stop_reason=max_retrieval_rounds_exhausted."
+  },
+  "answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+  "terminal_answer": "unanswerable",
+  "terminal_state": {
+   "contract_id": "engine_terminal_state.v1",
+   "answer": "unanswerable",
+   "raw_generated_answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+   "raw_candidate_label": "unanswerable",
+   "normalized_candidate_label": "unanswerable",
+   "verified_canonical_answer": "",
+   "semantic_correction_applied": false,
+   "correction_reason": "",
+   "authoritative_evidence_id": "",
+   "authoritative_evidence_ref": "",
+   "authoritative_quote": "",
+   "authoritative_conflict": {},
+   "typed_authority": {},
+   "terminal_reason": "",
+   "guardrail_result": {
+    "status": "not_enough_evidence",
+    "action": "abstain",
+    "reason": "Retrieved evidence does not fill 1 required QueryPlan slot(s). stop_reason=max_retrieval_rounds_exhausted."
+   },
+   "verify_decision": {
+    "mode": "light",
+    "status": "not_enough_evidence",
+    "reason": "Verification-required evidence slots are missing: operand:revolving_credit_capacity:2023",
+    "action": "abstain",
+    "claims": [],
+    "unsupported_claims": [],
+    "unknown_claims": [],
+    "verified_citations": [],
+    "claim_results": [],
+    "input_answer_polarity": "",
+    "canonical_answer_polarity": "",
+    "semantic_correction_applied": false,
+    "boolean_authority_status": "",
+    "authoritative_evidence_id": "",
+    "authoritative_evidence_ref": "",
+    "authoritative_span_id": "",
+    "authoritative_quote": "",
+    "authoritative_span_start": null,
+    "authoritative_span_end": null,
+    "authoritative_canonical_start": null,
+    "authoritative_canonical_end": null,
+    "actor": "",
+    "section_scope": "",
+    "relation": "",
+    "object": "",
+    "predicate_arguments": {
+     "__tuple__": []
+    },
+    "qualifier": "",
+    "quantifier": "",
+    "verified_support_slot_ids": [],
+    "authority_derivations": [],
+    "selected_derivation_id": "",
+    "authoritative_conflict": {},
+    "typed_authority": {},
+    "candidate_contract_id": "",
+    "candidate_label": "",
+    "verifier_input_candidate": "",
+    "verifier_candidate_status": "",
+    "replacement_candidate_allowed": false,
+    "predicate": "",
+    "arguments": [],
+    "scope": ""
+   },
+   "guardrail_decision": {
+    "status": "not_enough_evidence",
+    "action": "abstain",
+    "reason": "Retrieved evidence does not fill 1 required QueryPlan slot(s). stop_reason=max_retrieval_rounds_exhausted."
+   },
+   "evidence_bundle": {
+    "route": "doc_text",
+    "items": [
+     {
+      "evidence_id": "1",
+      "source_id": "pepsico",
+      "source_name": "",
+      "source_aliases": [
+       "pepsico"
+      ],
+      "page_label": "2",
+      "modality": "text",
+      "element_id": "",
+      "span_id": "1",
+      "canonical_id": "span:pepsico:1",
+      "parent_element_id": "",
+      "neighbor_element_ids": [],
+      "section_id": "",
+      "table_id": "",
+      "row_index": null,
+      "column_index": null,
+      "row_label": "revolving credit capacity",
+      "raw_row_label": "revolving credit capacity",
+      "normalized_row_label": "revolving credit capacity",
+      "period": "2023",
+      "value": "4200000000",
+      "unit": "USD",
+      "currency": "USD",
+      "continuation_id": "",
+      "chunk_start": null,
+      "chunk_end": null,
+      "normalized_text_hash": "6fff1b40b8988e9dada81ff9f220ca819ae9cc2cb129454a9a54f67a2b43d1db",
+      "duplicate_evidence_ids": [],
+      "retrieval_lineage": [
+       {
+        "round_id": 1,
+        "query_id": "round1:operand:revolving_credit_capacity:2023",
+        "slot_id": "operand:revolving_credit_capacity:2023",
+        "retriever_name": "text",
+        "raw_rank": 1,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       }
+      ],
+      "bbox": null,
+      "caption": "",
+      "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+      "ocr_text": "",
+      "vlm_text": "",
+      "source_backrefs": [
+       "pepsico#page:2"
+      ],
+      "evidence_level": "span",
+      "metadata": {},
+      "cell_id": "",
+      "table_instance_id": null,
+      "table_group_id": null,
+      "block_id": null,
+      "column_label": null,
+      "period_kind": null,
+      "scale": null,
+      "statement_kind": null,
+      "financial_scope": null,
+      "representations": [
+       {
+        "modality": "text",
+        "field": "text",
+        "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+       }
+      ],
+      "identity": {
+       "source_id": "pepsico",
+       "kind": "span",
+       "local_id": "1"
+      }
+     },
+     {
+      "evidence_id": "span:pepsico:2:span-6dcc3ac823c84427",
+      "file_id": "pepsico",
+      "file_name": "",
+      "page_label": "2",
+      "element_id": "span-6dcc3ac823c84427",
+      "modality": "text",
+      "evidence_level": "span",
+      "table_id": "",
+      "parent_element_id": "1",
+      "row_label": "revolving credit capacity",
+      "value": "4200000000",
+      "unit": "USD",
+      "scale": "one",
+      "currency": "USD",
+      "bbox": null,
+      "caption": "revolving credit capacity",
+      "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+      "source_backrefs": [
+       "pepsico#page:2"
+      ],
+      "metadata": {
+       "element_schema_version": "1.0",
+       "index_source": "docstore_document",
+       "parser_backend": "local_element_parser_v1",
+       "parser_source_doc_id": "1",
+       "parser_record_type": "financial_numeric_span",
+       "agreement_lifecycle_status": "active",
+       "facility_type": "364_day",
+       "facility_identity": "364_day",
+       "scale_provenance": "local_currency_amount"
+      },
+      "source_id": "pepsico",
+      "cell_id": "",
+      "span_id": "",
+      "neighbor_element_ids": [],
+      "section_id": "",
+      "row_index": null,
+      "column_index": null,
+      "continuation_id": "",
+      "chunk_start": null,
+      "chunk_end": null,
+      "normalized_text_hash": "cba7ab81393e15806584181f15649bb60b59108bc88b957375ba43cb77348f85",
+      "table_instance_id": null,
+      "table_group_id": null,
+      "block_id": null,
+      "column_label": null,
+      "period": null,
+      "period_kind": null,
+      "statement_kind": null,
+      "financial_scope": null,
+      "duplicate_evidence_ids": [],
+      "retrieval_lineage": [],
+      "representations": [
+       {
+        "modality": "text",
+        "field": "text",
+        "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+       },
+       {
+        "modality": "caption",
+        "field": "caption",
+        "text": "revolving credit capacity"
+       }
+      ],
+      "identity": {
+       "source_id": "pepsico",
+       "kind": "span",
+       "local_id": "span-6dcc3ac823c84427"
+      },
+      "canonical_id": "span:pepsico:span-6dcc3ac823c84427"
+     },
+     {
+      "evidence_id": "2",
+      "source_id": "pepsico",
+      "source_name": "",
+      "source_aliases": [
+       "pepsico"
+      ],
+      "page_label": "2",
+      "modality": "text",
+      "element_id": "",
+      "span_id": "2",
+      "canonical_id": "span:pepsico:2",
+      "parent_element_id": "",
+      "neighbor_element_ids": [],
+      "section_id": "",
+      "table_id": "",
+      "row_index": null,
+      "column_index": null,
+      "row_label": "revolving credit capacity",
+      "raw_row_label": "revolving credit capacity",
+      "normalized_row_label": "revolving credit capacity",
+      "period": "2023",
+      "value": "4200000000",
+      "unit": "USD",
+      "currency": "USD",
+      "continuation_id": "",
+      "chunk_start": null,
+      "chunk_end": null,
+      "normalized_text_hash": "6fff1b40b8988e9dada81ff9f220ca819ae9cc2cb129454a9a54f67a2b43d1db",
+      "duplicate_evidence_ids": [],
+      "retrieval_lineage": [
+       {
+        "round_id": 2,
+        "query_id": "round2:calculation_recovery:operand:revolving_credit_capacity:2023",
+        "slot_id": "operand:revolving_credit_capacity:2023",
+        "retriever_name": "text",
+        "raw_rank": 1,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       }
+      ],
+      "bbox": null,
+      "caption": "",
+      "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+      "ocr_text": "",
+      "vlm_text": "",
+      "source_backrefs": [
+       "pepsico#page:2"
+      ],
+      "evidence_level": "span",
+      "metadata": {},
+      "cell_id": "",
+      "table_instance_id": null,
+      "table_group_id": null,
+      "block_id": null,
+      "column_label": null,
+      "period_kind": null,
+      "scale": null,
+      "statement_kind": null,
+      "financial_scope": null,
+      "representations": [
+       {
+        "modality": "text",
+        "field": "text",
+        "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+       }
+      ],
+      "identity": {
+       "source_id": "pepsico",
+       "kind": "span",
+       "local_id": "2"
+      }
+     },
+     {
+      "evidence_id": "span:pepsico:2:span-babda013a69b4cdd",
+      "file_id": "pepsico",
+      "file_name": "",
+      "page_label": "2",
+      "element_id": "span-babda013a69b4cdd",
+      "modality": "text",
+      "evidence_level": "span",
+      "table_id": "",
+      "parent_element_id": "2",
+      "row_label": "revolving credit capacity",
+      "value": "4200000000",
+      "unit": "USD",
+      "scale": "one",
+      "currency": "USD",
+      "bbox": null,
+      "caption": "revolving credit capacity",
+      "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+      "source_backrefs": [
+       "pepsico#page:2"
+      ],
+      "metadata": {
+       "element_schema_version": "1.0",
+       "index_source": "docstore_document",
+       "parser_backend": "local_element_parser_v1",
+       "parser_source_doc_id": "2",
+       "parser_record_type": "financial_numeric_span",
+       "agreement_lifecycle_status": "active",
+       "facility_type": "364_day",
+       "facility_identity": "364_day",
+       "scale_provenance": "local_currency_amount"
+      },
+      "source_id": "pepsico",
+      "cell_id": "",
+      "span_id": "",
+      "neighbor_element_ids": [],
+      "section_id": "",
+      "row_index": null,
+      "column_index": null,
+      "continuation_id": "",
+      "chunk_start": null,
+      "chunk_end": null,
+      "normalized_text_hash": "cba7ab81393e15806584181f15649bb60b59108bc88b957375ba43cb77348f85",
+      "table_instance_id": null,
+      "table_group_id": null,
+      "block_id": null,
+      "column_label": null,
+      "period": null,
+      "period_kind": null,
+      "statement_kind": null,
+      "financial_scope": null,
+      "duplicate_evidence_ids": [],
+      "retrieval_lineage": [],
+      "representations": [
+       {
+        "modality": "text",
+        "field": "text",
+        "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+       },
+       {
+        "modality": "caption",
+        "field": "caption",
+        "text": "revolving credit capacity"
+       }
+      ],
+      "identity": {
+       "source_id": "pepsico",
+       "kind": "span",
+       "local_id": "span-babda013a69b4cdd"
+      },
+      "canonical_id": "span:pepsico:span-babda013a69b4cdd"
+     }
+    ],
+    "metadata": {
+     "evidence": [
+      {
+       "evidence_id": "1",
+       "source_id": "pepsico",
+       "source_name": "",
+       "source_aliases": [
+        "pepsico"
+       ],
+       "page_label": "2",
+       "modality": "text",
+       "element_id": "",
+       "span_id": "1",
+       "canonical_id": "span:pepsico:1",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "revolving credit capacity",
+       "raw_row_label": "revolving credit capacity",
+       "normalized_row_label": "revolving credit capacity",
+       "period": "2023",
+       "value": "4200000000",
+       "unit": "USD",
+       "currency": "USD",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "6fff1b40b8988e9dada81ff9f220ca819ae9cc2cb129454a9a54f67a2b43d1db",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revolving_credit_capacity:2023",
+         "slot_id": "operand:revolving_credit_capacity:2023",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "evidence_level": "span",
+       "metadata": {},
+       "cell_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period_kind": null,
+       "scale": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "1"
+       }
+      },
+      {
+       "evidence_id": "span:pepsico:2:span-6dcc3ac823c84427",
+       "file_id": "pepsico",
+       "file_name": "",
+       "page_label": "2",
+       "element_id": "span-6dcc3ac823c84427",
+       "modality": "text",
+       "evidence_level": "span",
+       "table_id": "",
+       "parent_element_id": "1",
+       "row_label": "revolving credit capacity",
+       "value": "4200000000",
+       "unit": "USD",
+       "scale": "one",
+       "currency": "USD",
+       "bbox": null,
+       "caption": "revolving credit capacity",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "metadata": {
+        "element_schema_version": "1.0",
+        "index_source": "docstore_document",
+        "parser_backend": "local_element_parser_v1",
+        "parser_source_doc_id": "1",
+        "parser_record_type": "financial_numeric_span",
+        "agreement_lifecycle_status": "active",
+        "facility_type": "364_day",
+        "facility_identity": "364_day",
+        "scale_provenance": "local_currency_amount"
+       },
+       "source_id": "pepsico",
+       "cell_id": "",
+       "span_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "cba7ab81393e15806584181f15649bb60b59108bc88b957375ba43cb77348f85",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [],
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        },
+        {
+         "modality": "caption",
+         "field": "caption",
+         "text": "revolving credit capacity"
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "span-6dcc3ac823c84427"
+       },
+       "canonical_id": "span:pepsico:span-6dcc3ac823c84427"
+      },
+      {
+       "evidence_id": "2",
+       "source_id": "pepsico",
+       "source_name": "",
+       "source_aliases": [
+        "pepsico"
+       ],
+       "page_label": "2",
+       "modality": "text",
+       "element_id": "",
+       "span_id": "2",
+       "canonical_id": "span:pepsico:2",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "revolving credit capacity",
+       "raw_row_label": "revolving credit capacity",
+       "normalized_row_label": "revolving credit capacity",
+       "period": "2023",
+       "value": "4200000000",
+       "unit": "USD",
+       "currency": "USD",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "6fff1b40b8988e9dada81ff9f220ca819ae9cc2cb129454a9a54f67a2b43d1db",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:operand:revolving_credit_capacity:2023",
+         "slot_id": "operand:revolving_credit_capacity:2023",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "evidence_level": "span",
+       "metadata": {},
+       "cell_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period_kind": null,
+       "scale": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "2"
+       }
+      },
+      {
+       "evidence_id": "span:pepsico:2:span-babda013a69b4cdd",
+       "file_id": "pepsico",
+       "file_name": "",
+       "page_label": "2",
+       "element_id": "span-babda013a69b4cdd",
+       "modality": "text",
+       "evidence_level": "span",
+       "table_id": "",
+       "parent_element_id": "2",
+       "row_label": "revolving credit capacity",
+       "value": "4200000000",
+       "unit": "USD",
+       "scale": "one",
+       "currency": "USD",
+       "bbox": null,
+       "caption": "revolving credit capacity",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "metadata": {
+        "element_schema_version": "1.0",
+        "index_source": "docstore_document",
+        "parser_backend": "local_element_parser_v1",
+        "parser_source_doc_id": "2",
+        "parser_record_type": "financial_numeric_span",
+        "agreement_lifecycle_status": "active",
+        "facility_type": "364_day",
+        "facility_identity": "364_day",
+        "scale_provenance": "local_currency_amount"
+       },
+       "source_id": "pepsico",
+       "cell_id": "",
+       "span_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "cba7ab81393e15806584181f15649bb60b59108bc88b957375ba43cb77348f85",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [],
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        },
+        {
+         "modality": "caption",
+         "field": "caption",
+         "text": "revolving credit capacity"
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "span-babda013a69b4cdd"
+       },
+       "canonical_id": "span:pepsico:span-babda013a69b4cdd"
+      }
+     ],
+     "retrieval_query_contracts": [
+      {
+       "contract_id": "initial_retrieval_query.v1",
+       "query_kind": "initial",
+       "round_id": 1,
+       "query_id": "round1:operand:revolving_credit_capacity:2023",
+       "slot_id": "operand:revolving_credit_capacity:2023",
+       "query": "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023"
+      },
+      {
+       "contract_id": "recovery_query.v1",
+       "query_kind": "recovery",
+       "round_id": 2,
+       "query_id": "round2:calculation_recovery:operand:revolving_credit_capacity:2023",
+       "slot_id": "operand:revolving_credit_capacity:2023",
+       "query": "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023 revolving credit capacity 2023 revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023 As of May 26, 2023, what is the total amount PepsiCo may borrow under its unsecured revolving credit agreements? distinct facility identity active agreement exclude bound facility exclude facility identity 364_day"
+      }
+     ],
+     "materialization_trace": {
+      "parent_table_candidate_count": 0,
+      "materialized_table_count": 0,
+      "materialized_cell_count": 2,
+      "materialization_cache_hit_rate": 0.0,
+      "materialized_cells_per_required_slot": 0.0,
+      "materialized_cells_by_required_slot": {
+       "operand:revolving_credit_capacity:2023": 0
+      },
+      "candidate_count_before_materialization": 2,
+      "candidate_count_after_materialization": 4,
+      "materialization_seconds": "elapsed seconds"
+     },
+     "calculation_recovery_trace": {
+      "contract_id": "calculation_recovery.v1",
+      "action": "targeted_retrieval_materialization_rebind",
+      "initial_missing_slot_ids": [
+       "operand:revolving_credit_capacity:2023"
+      ],
+      "attempt_count": 1,
+      "status": "failed",
+      "targeted_requests": [
+       {
+        "query_id": "round2:calculation_recovery:operand:revolving_credit_capacity:2023",
+        "slot_id": "operand:revolving_credit_capacity:2023",
+        "query": "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023 revolving credit capacity 2023 revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023 As of May 26, 2023, what is the total amount PepsiCo may borrow under its unsecured revolving credit agreements? distinct facility identity active agreement exclude bound facility exclude facility identity 364_day",
+        "modality": "auto"
+       }
+      ],
+      "final_missing_slot_ids": [
+       "operand:revolving_credit_capacity:2023"
+      ],
+      "authoritative_query_plan_state_authority": "",
+      "authoritative_slot_evidence_ids": {
+       "operand:revolving_credit_capacity:2023": [
+        "span:pepsico:1"
+       ]
+      }
+     },
+     "schema_version": "evidence_bundle.v2",
+     "dedupe_trace": {
+      "schema_version": "evidence_bundle.v2",
+      "input_count": 4,
+      "output_count": 4,
+      "structure_duplicate_count": 0,
+      "exact_text_duplicate_count": 0,
+      "overlap_duplicate_count": 0,
+      "minhash_duplicate_count": 0,
+      "semantic_duplicate_count": 0,
+      "conflict_guard_count": 0,
+      "duplicate_ratio": 0.0
+     },
+     "canonical_candidate_count": 4,
+     "canonical_candidate_evidence": [
+      {
+       "evidence_id": "1",
+       "source_id": "pepsico",
+       "source_name": "",
+       "source_aliases": [
+        "pepsico"
+       ],
+       "page_label": "2",
+       "modality": "text",
+       "element_id": "",
+       "span_id": "1",
+       "canonical_id": "span:pepsico:1",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "revolving credit capacity",
+       "raw_row_label": "revolving credit capacity",
+       "normalized_row_label": "revolving credit capacity",
+       "period": "2023",
+       "value": "4200000000",
+       "unit": "USD",
+       "currency": "USD",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "6fff1b40b8988e9dada81ff9f220ca819ae9cc2cb129454a9a54f67a2b43d1db",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revolving_credit_capacity:2023",
+         "slot_id": "operand:revolving_credit_capacity:2023",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "evidence_level": "span",
+       "metadata": {},
+       "cell_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period_kind": null,
+       "scale": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "1"
+       }
+      },
+      {
+       "evidence_id": "2",
+       "source_id": "pepsico",
+       "source_name": "",
+       "source_aliases": [
+        "pepsico"
+       ],
+       "page_label": "2",
+       "modality": "text",
+       "element_id": "",
+       "span_id": "2",
+       "canonical_id": "span:pepsico:2",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "revolving credit capacity",
+       "raw_row_label": "revolving credit capacity",
+       "normalized_row_label": "revolving credit capacity",
+       "period": "2023",
+       "value": "4200000000",
+       "unit": "USD",
+       "currency": "USD",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "6fff1b40b8988e9dada81ff9f220ca819ae9cc2cb129454a9a54f67a2b43d1db",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:operand:revolving_credit_capacity:2023",
+         "slot_id": "operand:revolving_credit_capacity:2023",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "evidence_level": "span",
+       "metadata": {},
+       "cell_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period_kind": null,
+       "scale": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "2"
+       }
+      },
+      {
+       "evidence_id": "span:pepsico:2:span-6dcc3ac823c84427",
+       "file_id": "pepsico",
+       "file_name": "",
+       "page_label": "2",
+       "element_id": "span-6dcc3ac823c84427",
+       "modality": "text",
+       "evidence_level": "span",
+       "table_id": "",
+       "parent_element_id": "1",
+       "row_label": "revolving credit capacity",
+       "value": "4200000000",
+       "unit": "USD",
+       "scale": "one",
+       "currency": "USD",
+       "bbox": null,
+       "caption": "revolving credit capacity",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "metadata": {
+        "element_schema_version": "1.0",
+        "index_source": "docstore_document",
+        "parser_backend": "local_element_parser_v1",
+        "parser_source_doc_id": "1",
+        "parser_record_type": "financial_numeric_span",
+        "agreement_lifecycle_status": "active",
+        "facility_type": "364_day",
+        "facility_identity": "364_day",
+        "scale_provenance": "local_currency_amount"
+       },
+       "source_id": "pepsico",
+       "cell_id": "",
+       "span_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "cba7ab81393e15806584181f15649bb60b59108bc88b957375ba43cb77348f85",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [],
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        },
+        {
+         "modality": "caption",
+         "field": "caption",
+         "text": "revolving credit capacity"
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "span-6dcc3ac823c84427"
+       },
+       "canonical_id": "span:pepsico:span-6dcc3ac823c84427"
+      },
+      {
+       "evidence_id": "span:pepsico:2:span-babda013a69b4cdd",
+       "file_id": "pepsico",
+       "file_name": "",
+       "page_label": "2",
+       "element_id": "span-babda013a69b4cdd",
+       "modality": "text",
+       "evidence_level": "span",
+       "table_id": "",
+       "parent_element_id": "2",
+       "row_label": "revolving credit capacity",
+       "value": "4200000000",
+       "unit": "USD",
+       "scale": "one",
+       "currency": "USD",
+       "bbox": null,
+       "caption": "revolving credit capacity",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "metadata": {
+        "element_schema_version": "1.0",
+        "index_source": "docstore_document",
+        "parser_backend": "local_element_parser_v1",
+        "parser_source_doc_id": "2",
+        "parser_record_type": "financial_numeric_span",
+        "agreement_lifecycle_status": "active",
+        "facility_type": "364_day",
+        "facility_identity": "364_day",
+        "scale_provenance": "local_currency_amount"
+       },
+       "source_id": "pepsico",
+       "cell_id": "",
+       "span_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "cba7ab81393e15806584181f15649bb60b59108bc88b957375ba43cb77348f85",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [],
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        },
+        {
+         "modality": "caption",
+         "field": "caption",
+         "text": "revolving credit capacity"
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "span-babda013a69b4cdd"
+       },
+       "canonical_id": "span:pepsico:span-babda013a69b4cdd"
+      }
+     ],
+     "candidate_evidence": [
+      {
+       "evidence_id": "1",
+       "source_id": "pepsico",
+       "source_name": "",
+       "source_aliases": [
+        "pepsico"
+       ],
+       "page_label": "2",
+       "modality": "text",
+       "element_id": "",
+       "span_id": "1",
+       "canonical_id": "span:pepsico:1",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "revolving credit capacity",
+       "raw_row_label": "revolving credit capacity",
+       "normalized_row_label": "revolving credit capacity",
+       "period": "2023",
+       "value": "4200000000",
+       "unit": "USD",
+       "currency": "USD",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "6fff1b40b8988e9dada81ff9f220ca819ae9cc2cb129454a9a54f67a2b43d1db",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revolving_credit_capacity:2023",
+         "slot_id": "operand:revolving_credit_capacity:2023",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "evidence_level": "span",
+       "metadata": {},
+       "cell_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period_kind": null,
+       "scale": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "1"
+       }
+      },
+      {
+       "evidence_id": "2",
+       "source_id": "pepsico",
+       "source_name": "",
+       "source_aliases": [
+        "pepsico"
+       ],
+       "page_label": "2",
+       "modality": "text",
+       "element_id": "",
+       "span_id": "2",
+       "canonical_id": "span:pepsico:2",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "revolving credit capacity",
+       "raw_row_label": "revolving credit capacity",
+       "normalized_row_label": "revolving credit capacity",
+       "period": "2023",
+       "value": "4200000000",
+       "unit": "USD",
+       "currency": "USD",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "6fff1b40b8988e9dada81ff9f220ca819ae9cc2cb129454a9a54f67a2b43d1db",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:operand:revolving_credit_capacity:2023",
+         "slot_id": "operand:revolving_credit_capacity:2023",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "evidence_level": "span",
+       "metadata": {},
+       "cell_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period_kind": null,
+       "scale": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "2"
+       }
+      },
+      {
+       "evidence_id": "span:pepsico:2:span-6dcc3ac823c84427",
+       "file_id": "pepsico",
+       "file_name": "",
+       "page_label": "2",
+       "element_id": "span-6dcc3ac823c84427",
+       "modality": "text",
+       "evidence_level": "span",
+       "table_id": "",
+       "parent_element_id": "1",
+       "row_label": "revolving credit capacity",
+       "value": "4200000000",
+       "unit": "USD",
+       "scale": "one",
+       "currency": "USD",
+       "bbox": null,
+       "caption": "revolving credit capacity",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "metadata": {
+        "element_schema_version": "1.0",
+        "index_source": "docstore_document",
+        "parser_backend": "local_element_parser_v1",
+        "parser_source_doc_id": "1",
+        "parser_record_type": "financial_numeric_span",
+        "agreement_lifecycle_status": "active",
+        "facility_type": "364_day",
+        "facility_identity": "364_day",
+        "scale_provenance": "local_currency_amount"
+       },
+       "source_id": "pepsico",
+       "cell_id": "",
+       "span_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "cba7ab81393e15806584181f15649bb60b59108bc88b957375ba43cb77348f85",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [],
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        },
+        {
+         "modality": "caption",
+         "field": "caption",
+         "text": "revolving credit capacity"
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "span-6dcc3ac823c84427"
+       },
+       "canonical_id": "span:pepsico:span-6dcc3ac823c84427"
+      },
+      {
+       "evidence_id": "span:pepsico:2:span-babda013a69b4cdd",
+       "file_id": "pepsico",
+       "file_name": "",
+       "page_label": "2",
+       "element_id": "span-babda013a69b4cdd",
+       "modality": "text",
+       "evidence_level": "span",
+       "table_id": "",
+       "parent_element_id": "2",
+       "row_label": "revolving credit capacity",
+       "value": "4200000000",
+       "unit": "USD",
+       "scale": "one",
+       "currency": "USD",
+       "bbox": null,
+       "caption": "revolving credit capacity",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "metadata": {
+        "element_schema_version": "1.0",
+        "index_source": "docstore_document",
+        "parser_backend": "local_element_parser_v1",
+        "parser_source_doc_id": "2",
+        "parser_record_type": "financial_numeric_span",
+        "agreement_lifecycle_status": "active",
+        "facility_type": "364_day",
+        "facility_identity": "364_day",
+        "scale_provenance": "local_currency_amount"
+       },
+       "source_id": "pepsico",
+       "cell_id": "",
+       "span_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "cba7ab81393e15806584181f15649bb60b59108bc88b957375ba43cb77348f85",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [],
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        },
+        {
+         "modality": "caption",
+         "field": "caption",
+         "text": "revolving credit capacity"
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "span-babda013a69b4cdd"
+       },
+       "canonical_id": "span:pepsico:span-babda013a69b4cdd"
+      }
+     ],
+     "candidate_ranked_evidence": [
+      {
+       "evidence_id": "1",
+       "source_id": "pepsico",
+       "source_name": "",
+       "source_aliases": [
+        "pepsico"
+       ],
+       "page_label": "2",
+       "modality": "text",
+       "element_id": "",
+       "span_id": "1",
+       "canonical_id": "span:pepsico:1",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "revolving credit capacity",
+       "raw_row_label": "revolving credit capacity",
+       "normalized_row_label": "revolving credit capacity",
+       "period": "2023",
+       "value": "4200000000",
+       "unit": "USD",
+       "currency": "USD",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "6fff1b40b8988e9dada81ff9f220ca819ae9cc2cb129454a9a54f67a2b43d1db",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revolving_credit_capacity:2023",
+         "slot_id": "operand:revolving_credit_capacity:2023",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "evidence_level": "span",
+       "metadata": {},
+       "cell_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period_kind": null,
+       "scale": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "1"
+       }
+      },
+      {
+       "evidence_id": "2",
+       "source_id": "pepsico",
+       "source_name": "",
+       "source_aliases": [
+        "pepsico"
+       ],
+       "page_label": "2",
+       "modality": "text",
+       "element_id": "",
+       "span_id": "2",
+       "canonical_id": "span:pepsico:2",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "revolving credit capacity",
+       "raw_row_label": "revolving credit capacity",
+       "normalized_row_label": "revolving credit capacity",
+       "period": "2023",
+       "value": "4200000000",
+       "unit": "USD",
+       "currency": "USD",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "6fff1b40b8988e9dada81ff9f220ca819ae9cc2cb129454a9a54f67a2b43d1db",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:operand:revolving_credit_capacity:2023",
+         "slot_id": "operand:revolving_credit_capacity:2023",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "evidence_level": "span",
+       "metadata": {},
+       "cell_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period_kind": null,
+       "scale": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "2"
+       }
+      },
+      {
+       "evidence_id": "span:pepsico:2:span-6dcc3ac823c84427",
+       "file_id": "pepsico",
+       "file_name": "",
+       "page_label": "2",
+       "element_id": "span-6dcc3ac823c84427",
+       "modality": "text",
+       "evidence_level": "span",
+       "table_id": "",
+       "parent_element_id": "1",
+       "row_label": "revolving credit capacity",
+       "value": "4200000000",
+       "unit": "USD",
+       "scale": "one",
+       "currency": "USD",
+       "bbox": null,
+       "caption": "revolving credit capacity",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "metadata": {
+        "element_schema_version": "1.0",
+        "index_source": "docstore_document",
+        "parser_backend": "local_element_parser_v1",
+        "parser_source_doc_id": "1",
+        "parser_record_type": "financial_numeric_span",
+        "agreement_lifecycle_status": "active",
+        "facility_type": "364_day",
+        "facility_identity": "364_day",
+        "scale_provenance": "local_currency_amount"
+       },
+       "source_id": "pepsico",
+       "cell_id": "",
+       "span_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "cba7ab81393e15806584181f15649bb60b59108bc88b957375ba43cb77348f85",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [],
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        },
+        {
+         "modality": "caption",
+         "field": "caption",
+         "text": "revolving credit capacity"
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "span-6dcc3ac823c84427"
+       },
+       "canonical_id": "span:pepsico:span-6dcc3ac823c84427"
+      },
+      {
+       "evidence_id": "span:pepsico:2:span-babda013a69b4cdd",
+       "file_id": "pepsico",
+       "file_name": "",
+       "page_label": "2",
+       "element_id": "span-babda013a69b4cdd",
+       "modality": "text",
+       "evidence_level": "span",
+       "table_id": "",
+       "parent_element_id": "2",
+       "row_label": "revolving credit capacity",
+       "value": "4200000000",
+       "unit": "USD",
+       "scale": "one",
+       "currency": "USD",
+       "bbox": null,
+       "caption": "revolving credit capacity",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "metadata": {
+        "element_schema_version": "1.0",
+        "index_source": "docstore_document",
+        "parser_backend": "local_element_parser_v1",
+        "parser_source_doc_id": "2",
+        "parser_record_type": "financial_numeric_span",
+        "agreement_lifecycle_status": "active",
+        "facility_type": "364_day",
+        "facility_identity": "364_day",
+        "scale_provenance": "local_currency_amount"
+       },
+       "source_id": "pepsico",
+       "cell_id": "",
+       "span_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "cba7ab81393e15806584181f15649bb60b59108bc88b957375ba43cb77348f85",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [],
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        },
+        {
+         "modality": "caption",
+         "field": "caption",
+         "text": "revolving credit capacity"
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "span-babda013a69b4cdd"
+       },
+       "canonical_id": "span:pepsico:span-babda013a69b4cdd"
+      }
+     ],
+     "candidate_ranking_contract": "global_ranked_v1",
+     "pre_rerank_required_slot_candidates_restored": 0,
+     "reranker_input_evidence": [],
+     "reranker_input_contract": "required_slot_restored.v1",
+     "fused_evidence": [
+      {
+       "evidence_id": "1",
+       "source_id": "pepsico",
+       "source_name": "",
+       "source_aliases": [
+        "pepsico"
+       ],
+       "page_label": "2",
+       "modality": "text",
+       "element_id": "",
+       "span_id": "1",
+       "canonical_id": "span:pepsico:1",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "revolving credit capacity",
+       "raw_row_label": "revolving credit capacity",
+       "normalized_row_label": "revolving credit capacity",
+       "period": "2023",
+       "value": "4200000000",
+       "unit": "USD",
+       "currency": "USD",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "6fff1b40b8988e9dada81ff9f220ca819ae9cc2cb129454a9a54f67a2b43d1db",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revolving_credit_capacity:2023",
+         "slot_id": "operand:revolving_credit_capacity:2023",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "evidence_level": "span",
+       "metadata": {},
+       "cell_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period_kind": null,
+       "scale": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "1"
+       }
+      },
+      {
+       "evidence_id": "2",
+       "source_id": "pepsico",
+       "source_name": "",
+       "source_aliases": [
+        "pepsico"
+       ],
+       "page_label": "2",
+       "modality": "text",
+       "element_id": "",
+       "span_id": "2",
+       "canonical_id": "span:pepsico:2",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "revolving credit capacity",
+       "raw_row_label": "revolving credit capacity",
+       "normalized_row_label": "revolving credit capacity",
+       "period": "2023",
+       "value": "4200000000",
+       "unit": "USD",
+       "currency": "USD",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "6fff1b40b8988e9dada81ff9f220ca819ae9cc2cb129454a9a54f67a2b43d1db",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:operand:revolving_credit_capacity:2023",
+         "slot_id": "operand:revolving_credit_capacity:2023",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "evidence_level": "span",
+       "metadata": {},
+       "cell_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period_kind": null,
+       "scale": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "2"
+       }
+      },
+      {
+       "evidence_id": "span:pepsico:2:span-6dcc3ac823c84427",
+       "file_id": "pepsico",
+       "file_name": "",
+       "page_label": "2",
+       "element_id": "span-6dcc3ac823c84427",
+       "modality": "text",
+       "evidence_level": "span",
+       "table_id": "",
+       "parent_element_id": "1",
+       "row_label": "revolving credit capacity",
+       "value": "4200000000",
+       "unit": "USD",
+       "scale": "one",
+       "currency": "USD",
+       "bbox": null,
+       "caption": "revolving credit capacity",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "metadata": {
+        "element_schema_version": "1.0",
+        "index_source": "docstore_document",
+        "parser_backend": "local_element_parser_v1",
+        "parser_source_doc_id": "1",
+        "parser_record_type": "financial_numeric_span",
+        "agreement_lifecycle_status": "active",
+        "facility_type": "364_day",
+        "facility_identity": "364_day",
+        "scale_provenance": "local_currency_amount"
+       },
+       "source_id": "pepsico",
+       "cell_id": "",
+       "span_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "cba7ab81393e15806584181f15649bb60b59108bc88b957375ba43cb77348f85",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [],
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        },
+        {
+         "modality": "caption",
+         "field": "caption",
+         "text": "revolving credit capacity"
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "span-6dcc3ac823c84427"
+       },
+       "canonical_id": "span:pepsico:span-6dcc3ac823c84427"
+      },
+      {
+       "evidence_id": "span:pepsico:2:span-babda013a69b4cdd",
+       "file_id": "pepsico",
+       "file_name": "",
+       "page_label": "2",
+       "element_id": "span-babda013a69b4cdd",
+       "modality": "text",
+       "evidence_level": "span",
+       "table_id": "",
+       "parent_element_id": "2",
+       "row_label": "revolving credit capacity",
+       "value": "4200000000",
+       "unit": "USD",
+       "scale": "one",
+       "currency": "USD",
+       "bbox": null,
+       "caption": "revolving credit capacity",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "metadata": {
+        "element_schema_version": "1.0",
+        "index_source": "docstore_document",
+        "parser_backend": "local_element_parser_v1",
+        "parser_source_doc_id": "2",
+        "parser_record_type": "financial_numeric_span",
+        "agreement_lifecycle_status": "active",
+        "facility_type": "364_day",
+        "facility_identity": "364_day",
+        "scale_provenance": "local_currency_amount"
+       },
+       "source_id": "pepsico",
+       "cell_id": "",
+       "span_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "cba7ab81393e15806584181f15649bb60b59108bc88b957375ba43cb77348f85",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [],
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        },
+        {
+         "modality": "caption",
+         "field": "caption",
+         "text": "revolving credit capacity"
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "span-babda013a69b4cdd"
+       },
+       "canonical_id": "span:pepsico:span-babda013a69b4cdd"
+      }
+     ],
+     "fusion_stage_snapshot": {
+      "contract_id": "fusion_stage_snapshot.v1",
+      "route": "doc_text",
+      "state": "passthrough",
+      "candidate_stage": "fusion_passthrough",
+      "reason": "route_does_not_use_cross_modal_fusion",
+      "input_count": 4,
+      "output_count": 4,
+      "input_identities": [
+       "span:pepsico:1",
+       "span:pepsico:2",
+       "span:pepsico:span-6dcc3ac823c84427",
+       "span:pepsico:span-babda013a69b4cdd"
+      ],
+      "output_identities": [
+       "span:pepsico:1",
+       "span:pepsico:2",
+       "span:pepsico:span-6dcc3ac823c84427",
+       "span:pepsico:span-babda013a69b4cdd"
+      ],
+      "identity_preserved": true,
+      "fusion_trace_present": false
+     },
+     "ranking_trace": {
+      "candidate_stage": "fusion_passthrough",
+      "candidate_limit": 4,
+      "candidate_input_count": 4,
+      "input_count": 4,
+      "reranker_input_count": 4,
+      "reranker_scored_count": 0,
+      "output_limit": 30,
+      "output_count": 0,
+      "backend_output_count": 0,
+      "reranker_output_count": 0,
+      "reranker_artifact_record_count": 0,
+      "selection_retained_reranked_count": null,
+      "backend_execution": false,
+      "configured": false,
+      "loaded": false,
+      "executed": false,
+      "backend": "",
+      "model": "",
+      "score_field": "",
+      "input_identities": [],
+      "output_identities": [],
+      "backend_output_identities": [],
+      "failure_reason": "missing_complete_execution_trace",
+      "score_tie_precision_decimals": 6,
+      "tie_breaker": "canonical_evidence_identity",
+      "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+      "fusion_stage_snapshot": {
+       "contract_id": "fusion_stage_snapshot.v1",
+       "route": "doc_text",
+       "state": "passthrough",
+       "candidate_stage": "fusion_passthrough",
+       "reason": "route_does_not_use_cross_modal_fusion",
+       "input_count": 4,
+       "output_count": 4,
+       "input_identities": [
+        "span:pepsico:1",
+        "span:pepsico:2",
+        "span:pepsico:span-6dcc3ac823c84427",
+        "span:pepsico:span-babda013a69b4cdd"
+       ],
+       "output_identities": [
+        "span:pepsico:1",
+        "span:pepsico:2",
+        "span:pepsico:span-6dcc3ac823c84427",
+        "span:pepsico:span-babda013a69b4cdd"
+       ],
+       "identity_preserved": true,
+       "fusion_trace_present": false
+      }
+     },
+     "reranker_aggregate_trace": {
+      "candidate_stage": "fusion_passthrough",
+      "candidate_limit": 4,
+      "candidate_input_count": 4,
+      "input_count": 4,
+      "reranker_input_count": 4,
+      "reranker_scored_count": 0,
+      "output_limit": 30,
+      "output_count": 0,
+      "backend_output_count": 0,
+      "reranker_output_count": 0,
+      "reranker_artifact_record_count": 0,
+      "selection_retained_reranked_count": null,
+      "backend_execution": false,
+      "configured": false,
+      "loaded": false,
+      "executed": false,
+      "backend": "",
+      "model": "",
+      "score_field": "",
+      "input_identities": [],
+      "output_identities": [],
+      "backend_output_identities": [],
+      "failure_reason": "missing_complete_execution_trace",
+      "score_tie_precision_decimals": 6,
+      "tie_breaker": "canonical_evidence_identity",
+      "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+      "fusion_stage_snapshot": {
+       "contract_id": "fusion_stage_snapshot.v1",
+       "route": "doc_text",
+       "state": "passthrough",
+       "candidate_stage": "fusion_passthrough",
+       "reason": "route_does_not_use_cross_modal_fusion",
+       "input_count": 4,
+       "output_count": 4,
+       "input_identities": [
+        "span:pepsico:1",
+        "span:pepsico:2",
+        "span:pepsico:span-6dcc3ac823c84427",
+        "span:pepsico:span-babda013a69b4cdd"
+       ],
+       "output_identities": [
+        "span:pepsico:1",
+        "span:pepsico:2",
+        "span:pepsico:span-6dcc3ac823c84427",
+        "span:pepsico:span-babda013a69b4cdd"
+       ],
+       "identity_preserved": true,
+       "fusion_trace_present": false
+      }
+     },
+     "page_coverage": [
+      "2"
+     ],
+     "source_ids": [
+      "pepsico"
+     ],
+     "evidence_ids": [
+      "1",
+      "span:pepsico:2:span-6dcc3ac823c84427",
+      "2",
+      "span:pepsico:2:span-babda013a69b4cdd"
+     ],
+     "source_page_locators": [
+      {
+       "source_id": "pepsico",
+       "page_label": "2"
+      }
+     ],
+     "source_page_alias_locators": [
+      {
+       "source_id": "pepsico",
+       "page_label": "2"
+      }
+     ],
+     "modality_counts": {
+      "text": 4
+     },
+     "selected_evidence": [
+      {
+       "evidence_id": "1",
+       "source_id": "pepsico",
+       "source_name": "",
+       "source_aliases": [
+        "pepsico"
+       ],
+       "page_label": "2",
+       "modality": "text",
+       "element_id": "",
+       "span_id": "1",
+       "canonical_id": "span:pepsico:1",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "revolving credit capacity",
+       "raw_row_label": "revolving credit capacity",
+       "normalized_row_label": "revolving credit capacity",
+       "period": "2023",
+       "value": "4200000000",
+       "unit": "USD",
+       "currency": "USD",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "6fff1b40b8988e9dada81ff9f220ca819ae9cc2cb129454a9a54f67a2b43d1db",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revolving_credit_capacity:2023",
+         "slot_id": "operand:revolving_credit_capacity:2023",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "evidence_level": "span",
+       "metadata": {},
+       "cell_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period_kind": null,
+       "scale": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "1"
+       }
+      },
+      {
+       "evidence_id": "span:pepsico:2:span-6dcc3ac823c84427",
+       "file_id": "pepsico",
+       "file_name": "",
+       "page_label": "2",
+       "element_id": "span-6dcc3ac823c84427",
+       "modality": "text",
+       "evidence_level": "span",
+       "table_id": "",
+       "parent_element_id": "1",
+       "row_label": "revolving credit capacity",
+       "value": "4200000000",
+       "unit": "USD",
+       "scale": "one",
+       "currency": "USD",
+       "bbox": null,
+       "caption": "revolving credit capacity",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "metadata": {
+        "element_schema_version": "1.0",
+        "index_source": "docstore_document",
+        "parser_backend": "local_element_parser_v1",
+        "parser_source_doc_id": "1",
+        "parser_record_type": "financial_numeric_span",
+        "agreement_lifecycle_status": "active",
+        "facility_type": "364_day",
+        "facility_identity": "364_day",
+        "scale_provenance": "local_currency_amount"
+       },
+       "source_id": "pepsico",
+       "cell_id": "",
+       "span_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "cba7ab81393e15806584181f15649bb60b59108bc88b957375ba43cb77348f85",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [],
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        },
+        {
+         "modality": "caption",
+         "field": "caption",
+         "text": "revolving credit capacity"
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "span-6dcc3ac823c84427"
+       },
+       "canonical_id": "span:pepsico:span-6dcc3ac823c84427"
+      },
+      {
+       "evidence_id": "2",
+       "source_id": "pepsico",
+       "source_name": "",
+       "source_aliases": [
+        "pepsico"
+       ],
+       "page_label": "2",
+       "modality": "text",
+       "element_id": "",
+       "span_id": "2",
+       "canonical_id": "span:pepsico:2",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "revolving credit capacity",
+       "raw_row_label": "revolving credit capacity",
+       "normalized_row_label": "revolving credit capacity",
+       "period": "2023",
+       "value": "4200000000",
+       "unit": "USD",
+       "currency": "USD",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "6fff1b40b8988e9dada81ff9f220ca819ae9cc2cb129454a9a54f67a2b43d1db",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:operand:revolving_credit_capacity:2023",
+         "slot_id": "operand:revolving_credit_capacity:2023",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "evidence_level": "span",
+       "metadata": {},
+       "cell_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period_kind": null,
+       "scale": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "2"
+       }
+      },
+      {
+       "evidence_id": "span:pepsico:2:span-babda013a69b4cdd",
+       "file_id": "pepsico",
+       "file_name": "",
+       "page_label": "2",
+       "element_id": "span-babda013a69b4cdd",
+       "modality": "text",
+       "evidence_level": "span",
+       "table_id": "",
+       "parent_element_id": "2",
+       "row_label": "revolving credit capacity",
+       "value": "4200000000",
+       "unit": "USD",
+       "scale": "one",
+       "currency": "USD",
+       "bbox": null,
+       "caption": "revolving credit capacity",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "metadata": {
+        "element_schema_version": "1.0",
+        "index_source": "docstore_document",
+        "parser_backend": "local_element_parser_v1",
+        "parser_source_doc_id": "2",
+        "parser_record_type": "financial_numeric_span",
+        "agreement_lifecycle_status": "active",
+        "facility_type": "364_day",
+        "facility_identity": "364_day",
+        "scale_provenance": "local_currency_amount"
+       },
+       "source_id": "pepsico",
+       "cell_id": "",
+       "span_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "cba7ab81393e15806584181f15649bb60b59108bc88b957375ba43cb77348f85",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [],
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        },
+        {
+         "modality": "caption",
+         "field": "caption",
+         "text": "revolving credit capacity"
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "span-babda013a69b4cdd"
+       },
+       "canonical_id": "span:pepsico:span-babda013a69b4cdd"
+      }
+     ],
+     "generation_context_evidence": [
+      {
+       "evidence_id": "1",
+       "source_id": "pepsico",
+       "source_name": "",
+       "source_aliases": [
+        "pepsico"
+       ],
+       "page_label": "2",
+       "modality": "text",
+       "element_id": "",
+       "span_id": "1",
+       "canonical_id": "span:pepsico:1",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "revolving credit capacity",
+       "raw_row_label": "revolving credit capacity",
+       "normalized_row_label": "revolving credit capacity",
+       "period": "2023",
+       "value": "4200000000",
+       "unit": "USD",
+       "currency": "USD",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "6fff1b40b8988e9dada81ff9f220ca819ae9cc2cb129454a9a54f67a2b43d1db",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revolving_credit_capacity:2023",
+         "slot_id": "operand:revolving_credit_capacity:2023",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "evidence_level": "span",
+       "metadata": {},
+       "cell_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period_kind": null,
+       "scale": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "1"
+       }
+      },
+      {
+       "evidence_id": "span:pepsico:2:span-6dcc3ac823c84427",
+       "file_id": "pepsico",
+       "file_name": "",
+       "page_label": "2",
+       "element_id": "span-6dcc3ac823c84427",
+       "modality": "text",
+       "evidence_level": "span",
+       "table_id": "",
+       "parent_element_id": "1",
+       "row_label": "revolving credit capacity",
+       "value": "4200000000",
+       "unit": "USD",
+       "scale": "one",
+       "currency": "USD",
+       "bbox": null,
+       "caption": "revolving credit capacity",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "metadata": {
+        "element_schema_version": "1.0",
+        "index_source": "docstore_document",
+        "parser_backend": "local_element_parser_v1",
+        "parser_source_doc_id": "1",
+        "parser_record_type": "financial_numeric_span",
+        "agreement_lifecycle_status": "active",
+        "facility_type": "364_day",
+        "facility_identity": "364_day",
+        "scale_provenance": "local_currency_amount"
+       },
+       "source_id": "pepsico",
+       "cell_id": "",
+       "span_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "cba7ab81393e15806584181f15649bb60b59108bc88b957375ba43cb77348f85",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [],
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        },
+        {
+         "modality": "caption",
+         "field": "caption",
+         "text": "revolving credit capacity"
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "span-6dcc3ac823c84427"
+       },
+       "canonical_id": "span:pepsico:span-6dcc3ac823c84427"
+      },
+      {
+       "evidence_id": "2",
+       "source_id": "pepsico",
+       "source_name": "",
+       "source_aliases": [
+        "pepsico"
+       ],
+       "page_label": "2",
+       "modality": "text",
+       "element_id": "",
+       "span_id": "2",
+       "canonical_id": "span:pepsico:2",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "revolving credit capacity",
+       "raw_row_label": "revolving credit capacity",
+       "normalized_row_label": "revolving credit capacity",
+       "period": "2023",
+       "value": "4200000000",
+       "unit": "USD",
+       "currency": "USD",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "6fff1b40b8988e9dada81ff9f220ca819ae9cc2cb129454a9a54f67a2b43d1db",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:operand:revolving_credit_capacity:2023",
+         "slot_id": "operand:revolving_credit_capacity:2023",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "evidence_level": "span",
+       "metadata": {},
+       "cell_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period_kind": null,
+       "scale": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "2"
+       }
+      },
+      {
+       "evidence_id": "span:pepsico:2:span-babda013a69b4cdd",
+       "file_id": "pepsico",
+       "file_name": "",
+       "page_label": "2",
+       "element_id": "span-babda013a69b4cdd",
+       "modality": "text",
+       "evidence_level": "span",
+       "table_id": "",
+       "parent_element_id": "2",
+       "row_label": "revolving credit capacity",
+       "value": "4200000000",
+       "unit": "USD",
+       "scale": "one",
+       "currency": "USD",
+       "bbox": null,
+       "caption": "revolving credit capacity",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "metadata": {
+        "element_schema_version": "1.0",
+        "index_source": "docstore_document",
+        "parser_backend": "local_element_parser_v1",
+        "parser_source_doc_id": "2",
+        "parser_record_type": "financial_numeric_span",
+        "agreement_lifecycle_status": "active",
+        "facility_type": "364_day",
+        "facility_identity": "364_day",
+        "scale_provenance": "local_currency_amount"
+       },
+       "source_id": "pepsico",
+       "cell_id": "",
+       "span_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "cba7ab81393e15806584181f15649bb60b59108bc88b957375ba43cb77348f85",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [],
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        },
+        {
+         "modality": "caption",
+         "field": "caption",
+         "text": "revolving credit capacity"
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "span-babda013a69b4cdd"
+       },
+       "canonical_id": "span:pepsico:span-babda013a69b4cdd"
+      }
+     ],
+     "used_evidence": [
+      {
+       "evidence_id": "1",
+       "source_id": "pepsico",
+       "source_name": "",
+       "source_aliases": [
+        "pepsico"
+       ],
+       "page_label": "2",
+       "modality": "text",
+       "element_id": "",
+       "span_id": "1",
+       "canonical_id": "span:pepsico:1",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "revolving credit capacity",
+       "raw_row_label": "revolving credit capacity",
+       "normalized_row_label": "revolving credit capacity",
+       "period": "2023",
+       "value": "4200000000",
+       "unit": "USD",
+       "currency": "USD",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "6fff1b40b8988e9dada81ff9f220ca819ae9cc2cb129454a9a54f67a2b43d1db",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revolving_credit_capacity:2023",
+         "slot_id": "operand:revolving_credit_capacity:2023",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "evidence_level": "span",
+       "metadata": {},
+       "cell_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period_kind": null,
+       "scale": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "1"
+       }
+      },
+      {
+       "evidence_id": "span:pepsico:2:span-6dcc3ac823c84427",
+       "file_id": "pepsico",
+       "file_name": "",
+       "page_label": "2",
+       "element_id": "span-6dcc3ac823c84427",
+       "modality": "text",
+       "evidence_level": "span",
+       "table_id": "",
+       "parent_element_id": "1",
+       "row_label": "revolving credit capacity",
+       "value": "4200000000",
+       "unit": "USD",
+       "scale": "one",
+       "currency": "USD",
+       "bbox": null,
+       "caption": "revolving credit capacity",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "metadata": {
+        "element_schema_version": "1.0",
+        "index_source": "docstore_document",
+        "parser_backend": "local_element_parser_v1",
+        "parser_source_doc_id": "1",
+        "parser_record_type": "financial_numeric_span",
+        "agreement_lifecycle_status": "active",
+        "facility_type": "364_day",
+        "facility_identity": "364_day",
+        "scale_provenance": "local_currency_amount"
+       },
+       "source_id": "pepsico",
+       "cell_id": "",
+       "span_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "cba7ab81393e15806584181f15649bb60b59108bc88b957375ba43cb77348f85",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [],
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        },
+        {
+         "modality": "caption",
+         "field": "caption",
+         "text": "revolving credit capacity"
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "span-6dcc3ac823c84427"
+       },
+       "canonical_id": "span:pepsico:span-6dcc3ac823c84427"
+      },
+      {
+       "evidence_id": "2",
+       "source_id": "pepsico",
+       "source_name": "",
+       "source_aliases": [
+        "pepsico"
+       ],
+       "page_label": "2",
+       "modality": "text",
+       "element_id": "",
+       "span_id": "2",
+       "canonical_id": "span:pepsico:2",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "revolving credit capacity",
+       "raw_row_label": "revolving credit capacity",
+       "normalized_row_label": "revolving credit capacity",
+       "period": "2023",
+       "value": "4200000000",
+       "unit": "USD",
+       "currency": "USD",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "6fff1b40b8988e9dada81ff9f220ca819ae9cc2cb129454a9a54f67a2b43d1db",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:operand:revolving_credit_capacity:2023",
+         "slot_id": "operand:revolving_credit_capacity:2023",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "evidence_level": "span",
+       "metadata": {},
+       "cell_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period_kind": null,
+       "scale": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "2"
+       }
+      },
+      {
+       "evidence_id": "span:pepsico:2:span-babda013a69b4cdd",
+       "file_id": "pepsico",
+       "file_name": "",
+       "page_label": "2",
+       "element_id": "span-babda013a69b4cdd",
+       "modality": "text",
+       "evidence_level": "span",
+       "table_id": "",
+       "parent_element_id": "2",
+       "row_label": "revolving credit capacity",
+       "value": "4200000000",
+       "unit": "USD",
+       "scale": "one",
+       "currency": "USD",
+       "bbox": null,
+       "caption": "revolving credit capacity",
+       "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+       "source_backrefs": [
+        "pepsico#page:2"
+       ],
+       "metadata": {
+        "element_schema_version": "1.0",
+        "index_source": "docstore_document",
+        "parser_backend": "local_element_parser_v1",
+        "parser_source_doc_id": "2",
+        "parser_record_type": "financial_numeric_span",
+        "agreement_lifecycle_status": "active",
+        "facility_type": "364_day",
+        "facility_identity": "364_day",
+        "scale_provenance": "local_currency_amount"
+       },
+       "source_id": "pepsico",
+       "cell_id": "",
+       "span_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "cba7ab81393e15806584181f15649bb60b59108bc88b957375ba43cb77348f85",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [],
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+        },
+        {
+         "modality": "caption",
+         "field": "caption",
+         "text": "revolving credit capacity"
+        }
+       ],
+       "identity": {
+        "source_id": "pepsico",
+        "kind": "span",
+        "local_id": "span-babda013a69b4cdd"
+       },
+       "canonical_id": "span:pepsico:span-babda013a69b4cdd"
+      }
+     ],
+     "stage_aliases": {
+      "used_evidence": "generation_context_evidence"
+     },
+     "query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:4406d7a9bd72a1f73cda",
+      "answer_type": "numeric",
+      "question_type": "numeric",
+      "subqueries": [
+       "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023"
+      ],
+      "evidence_slots": [
+       {
+        "slot_id": "operand:revolving_credit_capacity:2023",
+        "role": "operand",
+        "entity": "active_at:2023-05-26",
+        "metric": "revolving credit capacity",
+        "period": "2023",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "",
+        "financial_scope": "",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": true,
+        "required_for_verification": true,
+        "status": "retrieved_partial",
+        "evidence_ids": [
+         "span:pepsico:1"
+        ],
+        "cardinality": 2,
+        "operator_role": "collection",
+        "query": "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023",
+        "locator": {}
+       }
+      ],
+      "constraints": {
+       "periods": [
+        "2023"
+       ],
+       "verification_domain": "finance",
+       "requires_visual": false,
+       "requires_multiple_evidence": false,
+       "requires_distinct_source_pages": false,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": []
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": false,
+       "requires_structure": true,
+       "finance_formula_status": "not_applicable",
+       "question": "As of May 26, 2023, what is the total amount PepsiCo may borrow under its unsecured revolving credit agreements?"
+      },
+      "max_retrieval_rounds": 2,
+      "binding_trace": [
+       {
+        "slot_id": "operand:revolving_credit_capacity:2023",
+        "preserved_existing_binding": false,
+        "replacement_reason": "incomplete_existing_binding",
+        "before_identity": "span:pepsico:1",
+        "after_identity": "span:pepsico:1"
+       }
+      ],
+      "state_version": 4
+     },
+     "query_plan_id": "plan:4406d7a9bd72a1f73cda",
+     "planned_query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:4406d7a9bd72a1f73cda",
+      "answer_type": "numeric",
+      "question_type": "numeric",
+      "subqueries": [
+       "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023"
+      ],
+      "evidence_slots": [
+       {
+        "slot_id": "operand:revolving_credit_capacity:2023",
+        "role": "operand",
+        "entity": "active_at:2023-05-26",
+        "metric": "revolving credit capacity",
+        "period": "2023",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "",
+        "financial_scope": "",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": true,
+        "required_for_verification": true,
+        "status": "missing",
+        "evidence_ids": [],
+        "cardinality": 2,
+        "operator_role": "collection",
+        "query": "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023",
+        "locator": {}
+       }
+      ],
+      "constraints": {
+       "periods": [
+        "2023"
+       ],
+       "verification_domain": "finance",
+       "requires_visual": false,
+       "requires_multiple_evidence": false,
+       "requires_distinct_source_pages": false,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": []
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": false,
+       "requires_structure": true,
+       "finance_formula_status": "not_applicable"
+      },
+      "max_retrieval_rounds": 2,
+      "stage": "planned",
+      "state_version": 0
+     },
+     "bound_query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:4406d7a9bd72a1f73cda",
+      "answer_type": "numeric",
+      "question_type": "numeric",
+      "subqueries": [
+       "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023"
+      ],
+      "evidence_slots": [
+       {
+        "slot_id": "operand:revolving_credit_capacity:2023",
+        "role": "operand",
+        "entity": "active_at:2023-05-26",
+        "metric": "revolving credit capacity",
+        "period": "2023",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "",
+        "financial_scope": "",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": true,
+        "required_for_verification": true,
+        "status": "retrieved_partial",
+        "evidence_ids": [
+         "span:pepsico:1"
+        ],
+        "cardinality": 2,
+        "operator_role": "collection",
+        "query": "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023",
+        "locator": {}
+       }
+      ],
+      "constraints": {
+       "periods": [
+        "2023"
+       ],
+       "verification_domain": "finance",
+       "requires_visual": false,
+       "requires_multiple_evidence": false,
+       "requires_distinct_source_pages": false,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": []
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": false,
+       "requires_structure": true,
+       "finance_formula_status": "not_applicable",
+       "question": "As of May 26, 2023, what is the total amount PepsiCo may borrow under its unsecured revolving credit agreements?"
+      },
+      "max_retrieval_rounds": 2,
+      "binding_trace": [
+       {
+        "slot_id": "operand:revolving_credit_capacity:2023",
+        "preserved_existing_binding": false,
+        "replacement_reason": "incomplete_existing_binding",
+        "before_identity": "span:pepsico:1",
+        "after_identity": "span:pepsico:1"
+       }
+      ],
+      "state_version": 4
+     },
+     "evidence_selection_trace": {
+      "strategy": "marginal_evidence_set_selection_v3",
+      "candidate_count": 4,
+      "selected_count": 4,
+      "max_items": 16,
+      "max_pages": 6,
+      "unique_pages": 1,
+      "selected_pages": [
+       {
+        "source_id": "pepsico",
+        "page_label": "2"
+       }
+      ],
+      "slot_coverage": 0.0,
+      "missing_required_slot_count": 1,
+      "continuation_expansion_count": 0,
+      "page_modality_expansion_count": 0,
+      "structure_expansion_enabled": true,
+      "mmr_lambda": 0.7,
+      "structure_metadata_coverage": 0.5,
+      "mixed_candidate_structure_metadata_coverage": 0.5,
+      "structure_coverage_scope": "element_index",
+      "required_slot_candidates_restored": 0,
+      "candidate_budget_partitions": {
+       "factual_narrative": 0,
+       "execution_operands": 2,
+       "parent_tables": 1,
+       "dimensions": 0
+      },
+      "selected_budget_usage": {
+       "factual_narrative": 3,
+       "execution_operands": 1,
+       "parent_tables": 0,
+       "dimensions": 0
+      },
+      "evidence_stage_trace": [
+       {
+        "evidence_id": "span:pepsico:1",
+        "retrieved_candidate": true,
+        "selected_in_context": true,
+        "parent_retained": false,
+        "materialized_for_slot_ids": [],
+        "bound_to_slot_ids": [
+         "operand:revolving_credit_capacity:2023"
+        ],
+        "executable_operand": true,
+        "verified_support": false,
+        "citation_emitted": false,
+        "stage_scope": "selection"
+       },
+       {
+        "evidence_id": "span:pepsico:2",
+        "retrieved_candidate": true,
+        "selected_in_context": true,
+        "parent_retained": false,
+        "materialized_for_slot_ids": [],
+        "bound_to_slot_ids": [],
+        "executable_operand": false,
+        "verified_support": false,
+        "citation_emitted": false,
+        "stage_scope": "selection"
+       },
+       {
+        "evidence_id": "span:pepsico:span-6dcc3ac823c84427",
+        "retrieved_candidate": true,
+        "selected_in_context": true,
+        "parent_retained": false,
+        "materialized_for_slot_ids": [],
+        "bound_to_slot_ids": [],
+        "executable_operand": false,
+        "verified_support": false,
+        "citation_emitted": false,
+        "stage_scope": "selection"
+       },
+       {
+        "evidence_id": "span:pepsico:span-babda013a69b4cdd",
+        "retrieved_candidate": true,
+        "selected_in_context": true,
+        "parent_retained": false,
+        "materialized_for_slot_ids": [],
+        "bound_to_slot_ids": [],
+        "executable_operand": false,
+        "verified_support": false,
+        "citation_emitted": false,
+        "stage_scope": "selection"
+       }
+      ],
+      "trace_validation_errors": [],
+      "required_slot_bindings": [
+       {
+        "slot_id": "operand:revolving_credit_capacity:2023",
+        "status": "retrieved_partial",
+        "retrieval_satisfied": true,
+        "execution_satisfied": false,
+        "verification_satisfied": false,
+        "reason": "",
+        "selected_evidence_ids": [
+         "span:pepsico:1"
+        ],
+        "best_selected_slot_score": 2.0,
+        "candidate_selection_reasons": [
+         {
+          "evidence_id": "span:pepsico:1",
+          "reason": "bound_to_slot",
+          "slot_score": 2.0
+         },
+         {
+          "evidence_id": "span:pepsico:2",
+          "reason": "selected_in_context_not_bound",
+          "slot_score": 2.0
+         }
+        ],
+        "candidate_drop_reasons": [
+         {
+          "evidence_id": "span:pepsico:span-6dcc3ac823c84427",
+          "reason": "semantic_slot_mismatch",
+          "slot_score": 0.0
+         },
+         {
+          "evidence_id": "span:pepsico:span-babda013a69b4cdd",
+          "reason": "semantic_slot_mismatch",
+          "slot_score": 0.0
+         }
+        ]
+       }
+      ],
+      "execution_slot_lineage": [
+       {
+        "slot_id": "operand:revolving_credit_capacity:2023",
+        "slot_query": "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023",
+        "parent_candidates": [],
+        "selected_parent": "",
+        "materialized_cell_candidates": [],
+        "reranker_observations": [],
+        "selected_cell": "span:pepsico:1",
+        "binding_score": 2.0,
+        "rejection_reasons": [],
+        "execution_operand": {
+         "evidence_id": "1",
+         "source_id": "pepsico",
+         "source_name": "",
+         "source_aliases": [
+          "pepsico"
+         ],
+         "page_label": "2",
+         "modality": "text",
+         "element_id": "",
+         "span_id": "1",
+         "canonical_id": "span:pepsico:1",
+         "parent_element_id": "",
+         "neighbor_element_ids": [],
+         "section_id": "",
+         "table_id": "",
+         "row_index": null,
+         "column_index": null,
+         "row_label": "revolving credit capacity",
+         "raw_row_label": "revolving credit capacity",
+         "normalized_row_label": "revolving credit capacity",
+         "period": "2023",
+         "value": "4200000000",
+         "unit": "USD",
+         "currency": "USD",
+         "continuation_id": "",
+         "chunk_start": null,
+         "chunk_end": null,
+         "normalized_text_hash": "6fff1b40b8988e9dada81ff9f220ca819ae9cc2cb129454a9a54f67a2b43d1db",
+         "duplicate_evidence_ids": [],
+         "retrieval_lineage": [
+          {
+           "round_id": 1,
+           "query_id": "round1:operand:revolving_credit_capacity:2023",
+           "slot_id": "operand:revolving_credit_capacity:2023",
+           "retriever_name": "text",
+           "raw_rank": 1,
+           "raw_score": null,
+           "score_type": "not_recorded"
+          }
+         ],
+         "bbox": null,
+         "caption": "",
+         "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000.",
+         "ocr_text": "",
+         "vlm_text": "",
+         "source_backrefs": [
+          "pepsico#page:2"
+         ],
+         "evidence_level": "span",
+         "metadata": {},
+         "cell_id": "",
+         "table_instance_id": null,
+         "table_group_id": null,
+         "block_id": null,
+         "column_label": null,
+         "period_kind": null,
+         "scale": null,
+         "statement_kind": null,
+         "financial_scope": null,
+         "representations": [
+          {
+           "modality": "text",
+           "field": "text",
+           "text": "The active 364-day revolving credit agreement enables borrowing up to $4200000000."
+          }
+         ],
+         "identity": {
+          "source_id": "pepsico",
+          "kind": "span",
+          "local_id": "1"
+         },
+         "_selection_relevance_score": 0.0,
+         "_selection_relevance_sources": []
+        }
+       }
+      ],
+      "relevance_score_contract": "single_stage_per_query_rank_normalized_v2",
+      "boolean_assessment_cache": {
+       "unique_semantic_candidates": 0,
+       "slots": 0,
+       "cache_entries": 0,
+       "cache_builds": 1,
+       "cache_hits": 0,
+       "cache_misses": 0,
+       "classification_calls": 0,
+       "mmr_hot_loop_misses": 0,
+       "time_spent_ms": "elapsed milliseconds"
+      }
+     },
+     "structure_metadata_coverage": 0.5,
+     "slot_coverage": 0.0,
+     "missing_required_slot_count": 1,
+     "second_round_queries": [
+      "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023",
+      "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023 revolving credit capacity 2023 revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023 As of May 26, 2023, what is the total amount PepsiCo may borrow under its unsecured revolving credit agreements? distinct facility identity active agreement exclude bound facility exclude facility identity 364_day"
+     ],
+     "second_round_requests": [
+      {
+       "query_id": "round2:calculation_recovery:operand:revolving_credit_capacity:2023",
+       "slot_id": "operand:revolving_credit_capacity:2023",
+       "query": "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023 revolving credit capacity 2023 revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023 As of May 26, 2023, what is the total amount PepsiCo may borrow under its unsecured revolving credit agreements? distinct facility identity active agreement exclude bound facility exclude facility identity 364_day",
+       "modality": "auto"
+      }
+     ],
+     "retrieval_rounds": 2,
+     "finance_numeric_trace": {
+      "answer": "",
+      "confidence": 0.0,
+      "question_type": "unplanned_numeric",
+      "inputs": {},
+      "formula": "",
+      "calculation_plan": {
+       "contract_id": "calculation_plan.v1",
+       "formula_inputs": [],
+       "operands": [],
+       "steps": [],
+       "result_step_id": "",
+       "answer_unit": "",
+       "answer_scale": ""
+      },
+      "calculation_verification": {
+       "valid": false,
+       "errors": [
+        "required_slot_missing:operand:revolving_credit_capacity:2023"
+       ],
+       "verified_operand_ids": [],
+       "citation_ids": [],
+       "required_slot_ids": [
+        "operand:revolving_credit_capacity:2023"
+       ],
+       "verified_required_slot_ids": []
+      },
+      "calculation_execution": {
+       "status": "error",
+       "value": null,
+       "citation_ids": [],
+       "step_values": {},
+       "error": "verification_failed"
+      },
+      "authoritative_query_plan": {
+       "contract_id": "query_plan.v1",
+       "plan_id": "plan:4406d7a9bd72a1f73cda",
+       "answer_type": "numeric",
+       "question_type": "numeric",
+       "subqueries": [
+        "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023"
+       ],
+       "evidence_slots": [
+        {
+         "slot_id": "operand:revolving_credit_capacity:2023",
+         "role": "operand",
+         "entity": "active_at:2023-05-26",
+         "metric": "revolving credit capacity",
+         "period": "2023",
+         "period_kind": "",
+         "unit": "",
+         "scale": "",
+         "statement_kind": "",
+         "financial_scope": "",
+         "modality": "auto",
+         "required": true,
+         "required_for_retrieval": true,
+         "required_for_execution": true,
+         "required_for_verification": true,
+         "status": "retrieved_partial",
+         "evidence_ids": [
+          "span:pepsico:1"
+         ],
+         "cardinality": 2,
+         "operator_role": "collection",
+         "query": "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023",
+         "locator": {}
+        }
+       ],
+       "constraints": {
+        "periods": [
+         "2023"
+        ],
+        "verification_domain": "finance",
+        "requires_visual": false,
+        "requires_multiple_evidence": false,
+        "requires_distinct_source_pages": false,
+        "requires_structured_elements": false,
+        "explicit_page_labels": {
+         "__tuple__": []
+        },
+        "figure_label": "",
+        "table_label": "",
+        "requires_distinct_evidence": false,
+        "requires_structure": true,
+        "finance_formula_status": "not_applicable",
+        "question": "As of May 26, 2023, what is the total amount PepsiCo may borrow under its unsecured revolving credit agreements?"
+       },
+       "max_retrieval_rounds": 2,
+       "binding_trace": [
+        {
+         "slot_id": "operand:revolving_credit_capacity:2023",
+         "preserved_existing_binding": false,
+         "replacement_reason": "incomplete_existing_binding",
+         "before_identity": "span:pepsico:1",
+         "after_identity": "span:pepsico:1"
+        }
+       ],
+       "state_version": 4
+      },
+      "attempt_status": "verification_failed",
+      "dimension_bindings": []
+     },
+     "verification_slot_states": [
+      {
+       "slot_id": "operand:revolving_credit_capacity:2023",
+       "status": "missing",
+       "evidence_ids": []
+      }
+     ],
+     "missing_required_calculation_slot_ids": [
+      "operand:revolving_credit_capacity:2023"
+     ],
+     "calculation_recovery_requests": [
+      {
+       "query_id": "round2:calculation_recovery:operand:revolving_credit_capacity:2023",
+       "slot_id": "operand:revolving_credit_capacity:2023",
+       "query": "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023 revolving credit capacity 2023 revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023 As of May 26, 2023, what is the total amount PepsiCo may borrow under its unsecured revolving credit agreements? distinct facility identity active agreement exclude bound facility exclude facility identity 364_day",
+       "modality": "auto"
+      }
+     ],
+     "typed_adequacy_status": "incomplete",
+     "heuristic_adequacy_status": "good",
+     "final_adequacy_status": "ambiguous",
+     "adequacy_decision_authority": "query_plan",
+     "heuristic_overridden": false,
+     "heuristic_override_reason": "",
+     "typed_adequacy_reason": "typed_calculation_not_verified",
+     "retrieval_stop_reason": "max_retrieval_rounds_exhausted",
+     "missing_required_slot_ids": [],
+     "pipeline_stage_timings": {
+      "planning_seconds": "elapsed seconds",
+      "retrieval_seconds": "elapsed seconds",
+      "generation_seconds": "elapsed seconds",
+      "retry_seconds": "elapsed seconds",
+      "verification_seconds": "elapsed seconds",
+      "finalization_seconds": "elapsed seconds"
+     }
+    }
+   },
+   "terminal_outcome": "safe_abstention",
+   "presentation_answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+   "terminal_semantic_commit": {
+    "contract_id": "terminal_semantic_commit.v3",
+    "semantic_answer": "unanswerable",
+    "presentation_answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+    "outcome": "safe_abstention",
+    "outcome_reason": "Retrieved evidence does not fill 1 required QueryPlan slot(s). stop_reason=max_retrieval_rounds_exhausted.",
+    "answer_status": "abstained",
+    "verify_decision": {
+     "mode": "light",
+     "status": "not_enough_evidence",
+     "reason": "Verification-required evidence slots are missing: operand:revolving_credit_capacity:2023",
+     "action": "abstain",
+     "claims": [],
+     "unsupported_claims": [],
+     "unknown_claims": [],
+     "verified_citations": [],
+     "claim_results": [],
+     "input_answer_polarity": "",
+     "canonical_answer_polarity": "",
+     "semantic_correction_applied": false,
+     "boolean_authority_status": "",
+     "authoritative_evidence_id": "",
+     "authoritative_evidence_ref": "",
+     "authoritative_span_id": "",
+     "authoritative_quote": "",
+     "authoritative_span_start": null,
+     "authoritative_span_end": null,
+     "authoritative_canonical_start": null,
+     "authoritative_canonical_end": null,
+     "actor": "",
+     "section_scope": "",
+     "relation": "",
+     "object": "",
+     "predicate_arguments": {
+      "__tuple__": []
+     },
+     "qualifier": "",
+     "quantifier": "",
+     "verified_support_slot_ids": [],
+     "authority_derivations": [],
+     "selected_derivation_id": "",
+     "authoritative_conflict": {},
+     "typed_authority": {},
+     "candidate_contract_id": "",
+     "candidate_label": "",
+     "verifier_input_candidate": "",
+     "verifier_candidate_status": "",
+     "replacement_candidate_allowed": false,
+     "predicate": "",
+     "arguments": [],
+     "scope": ""
+    },
+    "guardrail_decision": {
+     "status": "not_enough_evidence",
+     "action": "abstain",
+     "reason": "Retrieved evidence does not fill 1 required QueryPlan slot(s). stop_reason=max_retrieval_rounds_exhausted."
+    },
+    "authoritative_evidence": [],
+    "citations": [],
+    "projection_hash": "ca59ebf1b039de67ba8cab4fb56fd660ef682e51caeeb3eea89eb77e5fcffc9b",
+    "state_version": 3
+   }
+  },
+  "terminal_verification": {
+   "mode": "light",
+   "status": "not_enough_evidence",
+   "reason": "Verification-required evidence slots are missing: operand:revolving_credit_capacity:2023",
+   "action": "abstain",
+   "claims": [],
+   "unsupported_claims": [],
+   "unknown_claims": [],
+   "verified_citations": [],
+   "claim_results": [],
+   "input_answer_polarity": "",
+   "canonical_answer_polarity": "",
+   "semantic_correction_applied": false,
+   "boolean_authority_status": "",
+   "authoritative_evidence_id": "",
+   "authoritative_evidence_ref": "",
+   "authoritative_span_id": "",
+   "authoritative_quote": "",
+   "authoritative_span_start": null,
+   "authoritative_span_end": null,
+   "authoritative_canonical_start": null,
+   "authoritative_canonical_end": null,
+   "actor": "",
+   "section_scope": "",
+   "relation": "",
+   "object": "",
+   "predicate_arguments": {
+    "__tuple__": []
+   },
+   "qualifier": "",
+   "quantifier": "",
+   "verified_support_slot_ids": [],
+   "authority_derivations": [],
+   "selected_derivation_id": "",
+   "authoritative_conflict": {},
+   "typed_authority": {},
+   "candidate_contract_id": "",
+   "candidate_label": "",
+   "verifier_input_candidate": "",
+   "verifier_candidate_status": "",
+   "replacement_candidate_allowed": false,
+   "predicate": "",
+   "arguments": [],
+   "scope": ""
+  },
+  "terminal_guardrail": {
+   "status": "not_enough_evidence",
+   "action": "abstain",
+   "reason": "Retrieved evidence does not fill 1 required QueryPlan slot(s). stop_reason=max_retrieval_rounds_exhausted."
+  },
+  "rounds": 2,
+  "recovery": {
+   "contract_id": "calculation_recovery.v1",
+   "action": "targeted_retrieval_materialization_rebind",
+   "initial_missing_slot_ids": [
+    "operand:revolving_credit_capacity:2023"
+   ],
+   "attempt_count": 1,
+   "status": "failed",
+   "targeted_requests": [
+    {
+     "query_id": "round2:calculation_recovery:operand:revolving_credit_capacity:2023",
+     "slot_id": "operand:revolving_credit_capacity:2023",
+     "query": "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023 revolving credit capacity 2023 revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023 As of May 26, 2023, what is the total amount PepsiCo may borrow under its unsecured revolving credit agreements? distinct facility identity active agreement exclude bound facility exclude facility identity 364_day",
+     "modality": "auto"
+    }
+   ],
+   "final_missing_slot_ids": [
+    "operand:revolving_credit_capacity:2023"
+   ],
+   "authoritative_query_plan_state_authority": "",
+   "authoritative_slot_evidence_ids": {
+    "operand:revolving_credit_capacity:2023": [
+     "span:pepsico:1"
+    ]
+   }
+  },
+  "numeric": {
+   "attempt_status": "verification_failed",
+   "answer": "",
+   "formula": "",
+   "inputs": {},
+   "calculation_execution": {
+    "status": "error",
+    "value": null,
+    "citation_ids": [],
+    "step_values": {},
+    "error": "verification_failed"
+   },
+   "calculation_verification": {
+    "valid": false,
+    "errors": [
+     "required_slot_missing:operand:revolving_credit_capacity:2023"
+    ],
+    "verified_operand_ids": [],
+    "citation_ids": [],
+    "required_slot_ids": [
+     "operand:revolving_credit_capacity:2023"
+    ],
+    "verified_required_slot_ids": []
+   },
+   "authoritative_query_plan": {
+    "contract_id": "query_plan.v1",
+    "plan_id": "plan:4406d7a9bd72a1f73cda",
+    "answer_type": "numeric",
+    "question_type": "numeric",
+    "subqueries": [
+     "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023"
+    ],
+    "evidence_slots": [
+     {
+      "slot_id": "operand:revolving_credit_capacity:2023",
+      "role": "operand",
+      "entity": "active_at:2023-05-26",
+      "metric": "revolving credit capacity",
+      "period": "2023",
+      "period_kind": "",
+      "unit": "",
+      "scale": "",
+      "statement_kind": "",
+      "financial_scope": "",
+      "modality": "auto",
+      "required": true,
+      "required_for_retrieval": true,
+      "required_for_execution": true,
+      "required_for_verification": true,
+      "status": "retrieved_partial",
+      "evidence_ids": [
+       "span:pepsico:1"
+      ],
+      "cardinality": 2,
+      "operator_role": "collection",
+      "query": "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023",
+      "locator": {}
+     }
+    ],
+    "constraints": {
+     "periods": [
+      "2023"
+     ],
+     "verification_domain": "finance",
+     "requires_visual": false,
+     "requires_multiple_evidence": false,
+     "requires_distinct_source_pages": false,
+     "requires_structured_elements": false,
+     "explicit_page_labels": {
+      "__tuple__": []
+     },
+     "figure_label": "",
+     "table_label": "",
+     "requires_distinct_evidence": false,
+     "requires_structure": true,
+     "finance_formula_status": "not_applicable",
+     "question": "As of May 26, 2023, what is the total amount PepsiCo may borrow under its unsecured revolving credit agreements?"
+    },
+    "max_retrieval_rounds": 2,
+    "binding_trace": [
+     {
+      "slot_id": "operand:revolving_credit_capacity:2023",
+      "preserved_existing_binding": false,
+      "replacement_reason": "incomplete_existing_binding",
+      "before_identity": "span:pepsico:1",
+      "after_identity": "span:pepsico:1"
+     }
+    ],
+    "state_version": 4
+   }
+  }
+ }
+}

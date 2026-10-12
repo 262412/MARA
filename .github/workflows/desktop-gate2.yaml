@@ -53,7 +53,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version: "3.10"
+          python-version: "3.11"
       - name: Set up uv
         uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
         with:
@@ -66,12 +66,14 @@ jobs:
           cache: npm
           cache-dependency-path: apps/desktop/package-lock.json
       - name: Sync locked Python workspace
-        run: uv sync --all-packages --frozen --python 3.10
+        run: uv sync --all-packages --frozen --python 3.11
       - name: Install Sidecar build dependency
         run: uv pip install --python .venv -r apps/desktop/sidecar/requirements-build.txt
       - name: Install locked desktop dependencies
         working-directory: apps/desktop
         run: npm ci
+      - name: Start isolated Qdrant test service
+        run: python scripts/prepare_qdrant_test_service.py
       - name: Run desktop contracts
         working-directory: apps/desktop
         run: npm run verify
@@ -100,7 +102,7 @@ jobs:
           query_request_file=/tmp/mara-desktop/data/MARA/tmp/gate3-query-request
           (
             cd apps/desktop
-            ../../.venv/bin/python -m sidecar.smoke_embedding_server \
+            exec ../../.venv/bin/python -m sidecar.smoke_embedding_server \
               --port-file "$embedding_port_file" \
               --port "$smoke_model_port" \
               --constant-embeddings \
@@ -374,7 +376,7 @@ jobs:
             --data-root "$settings_data_root" --seed
           (
             cd apps/desktop
-            ../../.venv/bin/python -m sidecar.smoke_embedding_server \
+            exec ../../.venv/bin/python -m sidecar.smoke_embedding_server \
               --port-file "$settings_port_file" \
               --port "$settings_model_port" \
               --token ollama \
@@ -475,8 +477,15 @@ jobs:
           trap - EXIT
           cp -a /tmp/mara-desktop/data/MARA \
             apps/desktop/release/gate2-smoke-data
+      - name: Record native resource ownership after smoke
+        run: |
+          .venv/bin/python apps/desktop/scripts/native-resource-receipt.py \
+            --package apps/desktop/release/MARA-linux-x64 \
+            --output apps/desktop/release/metrics/linux-22-native-resources.json
+      - name: Snapshot the test vector service for relocation
+        run: python scripts/prepare_qdrant_test_service.py --snapshot-output apps/desktop/release/gate2-vectors.snapshot
       - name: Archive Linux package
-        run: tar -C apps/desktop/release -czf apps/desktop/release/mara-linux-22.tar.gz MARA-linux-x64 metrics gate2-smoke-data
+        run: tar -C apps/desktop/release -czf apps/desktop/release/mara-linux-22.tar.gz MARA-linux-x64 metrics gate2-smoke-data gate2-vectors.snapshot
       - name: Upload Ubuntu 22.04 package evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -507,6 +516,13 @@ jobs:
           path: desktop-artifact
       - name: Extract package
         run: tar -xzf desktop-artifact/mara-linux-22.tar.gz -C desktop-artifact
+      - name: Verify relocated library links
+        run: |
+          broken_link=$(find desktop-artifact/MARA-linux-x64 -xtype l -print -quit)
+          if test -n "$broken_link"; then
+            printf 'Unresolved packaged link: %s\n' "$broken_link"
+            exit 1
+          fi
       - name: Configure Electron sandbox
         run: |
           sudo chown root:root desktop-artifact/MARA-linux-x64/chrome-sandbox
@@ -517,6 +533,8 @@ jobs:
         run: |
           mkdir -p /tmp/mara-desktop/data/MARA
           cp -a desktop-artifact/gate2-smoke-data/. /tmp/mara-desktop/data/MARA/
+      - name: Restore isolated Qdrant test service
+        run: python3 scripts/prepare_qdrant_test_service.py --restore-snapshot desktop-artifact/gate2-vectors.snapshot
       - name: Smoke packaged vertical slice
         shell: bash
         run: |
@@ -528,7 +546,7 @@ jobs:
           query_request_file=/tmp/mara-desktop/data/MARA/tmp/gate3-query-request
           (
             cd apps/desktop
-            python3 -m sidecar.smoke_embedding_server \
+            exec python3 -m sidecar.smoke_embedding_server \
               --port-file "$embedding_port_file" \
               --port "$smoke_model_port" \
               --token ollama \
@@ -566,7 +584,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version: "3.10"
+          python-version: "3.11"
       - name: Set up uv
         uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
         with:
@@ -578,13 +596,25 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: apps/desktop/package-lock.json
+      - name: Isolate native Python from MSYS and Cygwin libraries
+        shell: pwsh
+        run: |
+          # python-magic can hang when native Python loads an MSYS libmagic DLL.
+          $nativePath = $env:PATH -split ';' | Where-Object {
+            $_ -and
+            -not (Test-Path -LiteralPath (Join-Path $_ 'msys-2.0.dll')) -and
+            -not (Test-Path -LiteralPath (Join-Path $_ 'cygwin1.dll'))
+          }
+          "PATH=$($nativePath -join ';')" | Add-Content $env:GITHUB_ENV
       - name: Sync locked Python workspace
-        run: uv sync --all-packages --frozen --python 3.10
+        run: uv sync --all-packages --frozen --python 3.11
       - name: Install Sidecar build dependency
         run: uv pip install --python .venv -r apps/desktop/sidecar/requirements-build.txt
       - name: Install locked desktop dependencies
         working-directory: apps/desktop
         run: npm ci
+      - name: Start isolated Qdrant test service
+        run: python scripts/prepare_qdrant_test_service.py
       - name: Run desktop contracts
         working-directory: apps/desktop
         shell: pwsh
@@ -1245,6 +1275,12 @@ jobs:
           ) | Set-Content $metrics
           Get-Content $metrics | Add-Content $diagnostics
           Get-Content $metrics | Add-Content $env:GITHUB_STEP_SUMMARY
+      - name: Record native resource ownership after smoke
+        shell: pwsh
+        run: |
+          .venv/Scripts/python.exe apps/desktop/scripts/native-resource-receipt.py `
+            --package apps/desktop/release/MARA-win32-x64 `
+            --output apps/desktop/release/windows-native-resources.json
       - name: Scan package with Windows Defender
         shell: pwsh
         run: |
@@ -1332,6 +1368,7 @@ jobs:
             apps/desktop/release/windows-settings-chat-route.json
             apps/desktop/release/windows-model-route-migration.json
             apps/desktop/release/windows-metrics.txt
+            apps/desktop/release/windows-native-resources.json
             apps/desktop/release/windows-cli-compat-before.txt
             apps/desktop/release/windows-cli-compat-after.txt
           if-no-files-found: warn
@@ -1347,6 +1384,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mara-desktop-windows-build
+          include-hidden-files: true
           path: |
             apps/desktop/release/MARA-win32-x64/
             apps/desktop/release/windows-metrics.txt

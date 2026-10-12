@@ -3,7 +3,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
-from langchain.output_parsers.boolean import BooleanOutputParser
+from langchain_classic.output_parsers.boolean import BooleanOutputParser
 
 from kotaemon.base import Document
 

@@ -156,7 +156,11 @@ def test_coverage_policy_has_real_package_floors_and_excludes_tests():
         "kotaemon": 60,
         "ktem": 50,
     }
-    assert all("test" not in path for path in coverage_gate.PRODUCTION_PATHS.values())
+    assert all(
+        "test" not in path
+        for paths in coverage_gate.PRODUCTION_PATHS.values()
+        for path in paths
+    )
     assert "*/tests/*" in coverage_gate.COVERAGE_OMIT
     assert "*/ktem_tests/*" in coverage_gate.COVERAGE_OMIT
 
@@ -170,6 +174,168 @@ def test_coverage_policy_captures_python_subprocesses(tmp_path):
     assert "patch = subprocess" in config
     assert "parallel = True" in config
     assert "relative_files = True" in config
+
+
+def test_ktem_contracts_participate_in_collection_and_package_floor(
+    tmp_path, monkeypatch
+):
+    from configparser import ConfigParser
+
+    coverage_gate = _load_script("run_coverage_gates.py")
+    commands = []
+    monkeypatch.setattr(
+        coverage_gate, "_run", lambda command, **_kwargs: commands.append(command)
+    )
+    coverage_gate.run_gates(tmp_path)
+    config = ConfigParser()
+    config.read(tmp_path / "coverage.ini")
+
+    assert "libs/ktem/ktem_contracts" in config.get("run", "source").split()
+    report = next(command for command in commands if "--fail-under=50" in command)
+    assert "--include=libs/ktem/ktem/*,libs/ktem/ktem_contracts/*" in report
+
+
+def test_diff_coverage_counts_changed_contract_statements(tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(REPO_ROOT / "scripts"))
+    diff_gate = _load_script("check_diff_coverage.py")
+    source = "libs/ktem/ktem_contracts/file_selection.py"
+    coverage_json = tmp_path / "coverage.json"
+    coverage_json.write_text(
+        json.dumps({"files": {source: {"executed_lines": [1], "missing_lines": [2]}}}),
+        encoding="utf-8",
+    )
+
+    result = diff_gate.calculate_diff_coverage(coverage_json, {source: {1, 2}})
+
+    assert result.covered == 1
+    assert result.total == 2
+    assert result.percent == 50.0
+    assert result.missing == {source: [2]}
+
+
+@pytest.mark.parametrize("explicit_parent", [True, False])
+def test_coverage_exports_keep_production_and_exclude_removed_runtime_settings(
+    tmp_path, monkeypatch, request, explicit_parent
+):
+    from coverage import Coverage, CoverageData
+    from coverage.exceptions import NoSource
+
+    coverage_gate = _load_script("run_coverage_gates.py")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    monkeypatch.chdir(repo)
+    monkeypatch.setattr(coverage_gate, "REPO_ROOT", repo)
+    production = {
+        "benchmark/example.py",
+        "libs/kotaemon/kotaemon/example.py",
+        "libs/ktem/ktem/example.py",
+        "libs/ktem/ktem_contracts/example.py",
+        "libs/slide_cli/slide_cli/example.py",
+        "app.py",
+        "flowsettings.py",
+        "sso_app.py",
+        "sso_app_demo.py",
+    }
+    for name in production:
+        path = repo / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("COVERED = 1\nUNCOVERED = 2\n", encoding="utf-8")
+    if explicit_parent:
+        runtime_parent = tmp_path / "runtimes"
+        monkeypatch.setenv("MARA_PYTEST_RUNTIME_PARENT", str(runtime_parent))
+    else:
+        runtime_parent = tmp_path / "mara_pytest"
+        monkeypatch.delenv("MARA_PYTEST_RUNTIME_PARENT", raising=False)
+        monkeypatch.setattr(coverage_gate.tempfile, "gettempdir", lambda: str(tmp_path))
+    removed_settings = runtime_parent / "session-deleted" / "flowsettings.py"
+    removed_settings.parent.mkdir(parents=True)
+    removed_settings.write_text("FIXTURE = 1\n", encoding="utf-8")
+    removed_settings.unlink()
+    output = tmp_path / "coverage-artifacts"
+    config_path = coverage_gate.write_coverage_config(output)
+    data_path = output / ".coverage"
+    data = CoverageData(basename=str(data_path))
+    request.addfinalizer(data.close)
+    data.add_lines({**{name: [1] for name in production}, str(removed_settings): [1]})
+    data.write()
+
+    def forbid_collection(*_args, **_kwargs):
+        raise AssertionError("Export regression must not start coverage collection")
+
+    monkeypatch.setattr(Coverage, "start", forbid_collection)
+    coverage = Coverage(config_file=str(config_path), data_file=str(data_path))
+    # Reporting creates mapped SQLite copies; close every copy owned by this instance.
+    request.addfinalizer(coverage._atexit)
+    coverage.load()
+    assert coverage.xml_report(outfile=str(output / "coverage.xml")) == 50.0
+    assert coverage.json_report(outfile=str(output / "coverage.json")) == 50.0
+    payload = json.loads((output / "coverage.json").read_text(encoding="utf-8"))
+    assert {name.replace("\\", "/") for name in payload["files"]} == production
+    for file_data in payload["files"].values():
+        assert file_data["executed_lines"] == [1]
+        assert file_data["missing_lines"] == [2]
+
+    # Missing real production code must still fail rather than be ignored.
+    (repo / "flowsettings.py").unlink()
+    with pytest.raises(NoSource, match="flowsettings.py"):
+        coverage.xml_report(outfile=str(output / "missing-production.xml"))
+
+
+@pytest.mark.parametrize(
+    "package, source_path",
+    [
+        ("kotaemon", "libs/kotaemon/kotaemon"),
+        ("ktem", "libs/ktem/ktem"),
+        ("slide_cli", "libs/slide_cli/slide_cli"),
+        ("ktem_contracts", "libs/ktem/ktem_contracts"),
+    ],
+)
+@pytest.mark.parametrize("separator", ["/", "\\"])
+def test_coverage_combines_package_working_directory_paths(
+    tmp_path, monkeypatch, request, package, source_path, separator
+):
+    from coverage import Coverage, CoverageData
+
+    coverage_gate = _load_script("run_coverage_gates.py")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    monkeypatch.chdir(repo)
+    monkeypatch.setattr(coverage_gate, "REPO_ROOT", repo)
+    production_name = f"{source_path}/__init__.py"
+    production = repo / production_name
+    production.parent.mkdir(parents=True)
+    production.write_text("FIRST = 1\nSECOND = 2\nUNCOVERED = 3\n", encoding="utf-8")
+    output = tmp_path / "coverage-artifacts"
+    config_path = coverage_gate.write_coverage_config(output)
+    data_path = output / ".coverage"
+    for suffix, name, lines in (
+        ("repo", production_name, [1]),
+        ("package", f"{package}{separator}__init__.py", [2]),
+    ):
+        data = CoverageData(basename=str(data_path), suffix=suffix)
+        request.addfinalizer(data.close)
+        data.add_lines({name: lines})
+        data.write()
+
+    def forbid_collection(*_args, **_kwargs):
+        raise AssertionError("Path regression must not start coverage collection")
+
+    monkeypatch.setattr(Coverage, "start", forbid_collection)
+    coverage = Coverage(config_file=str(config_path), data_file=str(data_path))
+    request.addfinalizer(coverage._atexit)
+    coverage.combine(strict=True)
+    coverage.save()
+    assert coverage.xml_report(outfile=str(output / "coverage.xml")) == pytest.approx(
+        200 / 3
+    )
+    assert coverage.json_report(outfile=str(output / "coverage.json")) == pytest.approx(
+        200 / 3
+    )
+    payload = json.loads((output / "coverage.json").read_text(encoding="utf-8"))
+    files = {name.replace("\\", "/"): value for name, value in payload["files"].items()}
+    assert set(files) == {production_name}
+    assert files[production_name]["executed_lines"] == [1, 2]
+    assert files[production_name]["missing_lines"] == [3]
 
 
 def test_qasper_local_gate_covers_provider_generation_and_audit():

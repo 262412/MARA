@@ -1,0 +1,32 @@
+{
+  "files_verified": 94,
+  "policy_returns": 5,
+  "guide_abstentions": 5,
+  "old_verifier_accepts_new_policy_claims": 5,
+  "lexical_check": {
+    "matched": 8,
+    "total": 12,
+    "required": 9
+  },
+  "subsystem_tests_passed": 129,
+  "visual": {
+    "automatic_answer_percent": -50.0,
+    "fixed_visual_answer_percent": -40.0,
+    "image_removed_answer_percent": -50.0,
+    "reference_low": -42,
+    "reference_high": -38,
+    "image_parts": 1,
+    "manual_route_change": true
+  },
+  "preliminary_slot_failure_retained": true,
+  "recipe_validation": {
+    "automatic_answer_percent": -50.0,
+    "fixed_visual_answer_percent": -40.0,
+    "image_removed_answer_percent": -50.0,
+    "reference_low": -42,
+    "reference_high": -38,
+    "image_parts": 1,
+    "manual_route_change": true
+  },
+  "historical_slidevqa_outputs_recovered": false
+}

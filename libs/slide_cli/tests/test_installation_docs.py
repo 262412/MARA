@@ -54,6 +54,8 @@ def test_posix_installer_installs_mara_cli_from_local_implementation():
 def test_root_readme_documents_mara_research_cli_source_install():
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
 
+    assert "docs/development/contributing.md" in readme
+    assert "`install.sh`" in readme
     assert r".\install.ps1" in readme
     assert "./install.sh" in readme
     assert "uv sync --extra mara" not in readme
@@ -68,7 +70,7 @@ def test_local_verification_docs_do_not_resync_the_canonical_environment():
         REPO_ROOT / "docs/development/codebase-hygiene-contract.md"
     ).read_text(encoding="utf-8")
 
-    assert "uv run --python 3.10" not in readme
-    assert "uv run --python 3.10" not in hygiene_contract
-    assert "uv run --no-sync --python 3.10" in readme
-    assert "uv run --no-sync --python 3.10" in hygiene_contract
+    assert "uv run --python 3.11" not in readme
+    assert "uv run --python 3.11" not in hygiene_contract
+    assert "uv run --no-sync --python 3.11" in readme
+    assert "uv run --no-sync --python 3.11" in hygiene_contract

@@ -1,0 +1,56 @@
+{
+  "application_source_commit": "e6afa5dcda18ef6d5d6aae2efb0f1a6b806187b3",
+  "installer_asset_sha256": "886b949135ce74f123e0ae7b8a81c533594f0e98739b8057c277485ec3fb1432",
+  "python": "3.10.19",
+  "platform": "win32",
+  "packages": {
+    "mara-app": "0.0.41",
+    "mara-research-cli": "0.0.41",
+    "ktem": "0.0.41",
+    "kotaemon": "0.0.41",
+    "openai": "1.109.1",
+    "chromadb": "0.5.16"
+  },
+  "provider_specs": {
+    "llm_table": {
+      "api_key": "[REDACTED]",
+      "base_url": "https://api.deepseek.com",
+      "model": "deepseek-v4-flash",
+      "__type__": "kotaemon.llms.chats.openai.ChatOpenAI",
+      "timeout": 45
+    },
+    "embedding": {
+      "api_key": "[REDACTED]",
+      "base_url": "https://api.openai.com/v1",
+      "context_length": 8191,
+      "model": "text-embedding-3-large",
+      "timeout": 30,
+      "__type__": "kotaemon.embeddings.OpenAIEmbeddings"
+    },
+    "reranking": {
+      "cohere_api_key": "[REDACTED]",
+      "model_name": "rerank-multilingual-v3.0",
+      "__type__": "kotaemon.rerankings.CohereReranking"
+    }
+  },
+  "reranker_used": false,
+  "settings_location": "before-response.json#/settings and after-response.json#/settings",
+  "request_location": "before-request.json and after-request.json",
+  "file_artifact_generation_enabled": false,
+  "observed_generation": {
+    "method": "kotaemon.llms.chats.openai.BaseChatOpenAI.stream",
+    "configured_model": "deepseek-v4-flash",
+    "calls_per_turn": 1,
+    "input_type": "text chat messages, with source text included",
+    "output_type": "unchanged streaming content captured by capture_provider.py",
+    "runtime_generation_backend_field": null,
+    "visual_generation_gate": null,
+    "visual_path_exercised": false,
+    "server_resolved_model_snapshot": "not recorded; model name is provider alias"
+  },
+  "sanitization": [
+    "API key values redacted",
+    "absolute case directory replaced by <CASE_ROOT>"
+  ],
+  "network": "External APIs; the embedding connection used the existing local HTTP proxy"
+}

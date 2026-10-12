@@ -1,0 +1,76 @@
+{
+  "checked_at_utc": "2026-09-22T17:58:02.915861+00:00",
+  "release_id": 351050065,
+  "release_url": "https://github.com/262412/MARA/releases/tag/v0.0.40",
+  "assets": [
+    {
+      "id": 474358900,
+      "name": "mara-full-system-benchmark-synthesis-v0.0.40.zip",
+      "size": 1038051,
+      "digest": "sha256:7fabae169ef270dd2e6ee5edd1aa74841f3ffa100f3bf47bb5fa6139f866cafb",
+      "browser_download_url": "https://github.com/262412/MARA/releases/download/v0.0.40/mara-full-system-benchmark-synthesis-v0.0.40.zip"
+    },
+    {
+      "id": 581920260,
+      "name": "slide-app.zip",
+      "size": 33918912,
+      "digest": "sha256:886b949135ce74f123e0ae7b8a81c533594f0e98739b8057c277485ec3fb1432",
+      "browser_download_url": "https://github.com/262412/MARA/releases/download/v0.0.40/slide-app.zip"
+    },
+    {
+      "id": 581929998,
+      "name": "slide-app.zip.sha256",
+      "size": 81,
+      "digest": "sha256:577a7273a37e51069af24459a2db4afb45b625809c0d161901d1aa62596a194b",
+      "browser_download_url": "https://github.com/262412/MARA/releases/download/v0.0.40/slide-app.zip.sha256"
+    }
+  ],
+  "public_download": {
+    "http_status": 200,
+    "anonymous": true,
+    "bytes": 33918912,
+    "sha256": "886b949135ce74f123e0ae7b8a81c533594f0e98739b8057c277485ec3fb1432",
+    "zip_crc_ok": true,
+    "manifest_files_checked": 26,
+    "matches_previously_installed_bundle": true
+  },
+  "public_page": {
+    "new_installation_heading": true,
+    "asset_count": 3,
+    "version_identity_present": true,
+    "http_status": 200,
+    "release_id": 351050065
+  },
+  "checksum_sidecar_anonymously_read": true,
+  "tag_before_and_after": "37487f35610076c1016e1b59d3bf982388d1a275",
+  "tag_unchanged": true,
+  "historical_source_clone_exit": 0,
+  "historical_source_install": {
+    "source_commit": "37487f35610076c1016e1b59d3bf982388d1a275",
+    "exit_code": 1,
+    "command": "uv sync --extra mara",
+    "timestamp": "2026-09-23T01:48:31.3880803+08:00",
+    "environment": "D:\\MARA-reviewer-build\\20260923-release-v0.0.40\\source-environment",
+    "python": "3.10.19"
+  },
+  "failure": {
+    "package": "llama-cpp-python==0.2.7",
+    "dependency_chain": "mara-app -> kotaemon[all] -> llama-cpp-python",
+    "missing_build_tools": [
+      "nmake",
+      "C compiler",
+      "C++ compiler"
+    ],
+    "source_and_lock_unchanged_after_test": true
+  },
+  "benchmark_asset_unchanged": true,
+  "new_model_qa_run": false,
+  "paper_build_exit": 0,
+  "overleaf_extracted_build_exit": 0,
+  "paper_pages": 11,
+  "main_content_ends_on_page": 5,
+  "overleaf_cloud_build_executed": false,
+  "paper_pdf_sha256": "6433cb9ba1b1013a158930a25529e1fe7e7f1d326bb435ad31494a0fe5ad941c",
+  "overleaf_zip_sha256": "181292c20aea25e2de4eb7b13133c63fe007c7852e4af363ee937fd12fe671fd",
+  "full_logs_directory": "D:\\MARA-reviewer-build\\20260923-release-v0.0.40"
+}

@@ -1,0 +1,150 @@
+{
+  "paper_name": "LMDoc",
+  "release_name": "MARA",
+  "raw_records_sources_tables_bibliography_unchanged": true,
+  "byte_identical_files_checked": 39,
+  "unchanged_file_sha256": {
+    "case_study/capture_provider.py": "8bdbf67d0fc75b009e2d5d418924197a291bf038613f8d180258ac8cb8cb8391",
+    "case_study/case-protocol.json": "b316370417cc676d6e7acff1d65e3a9e7d7bd3e57e6c3946f6ec559877169392",
+    "case_study/configuration.py": "b3fbc3ece6f5f1afa4210b90ffb74c4ac3b66e23a1093de198a8507535858086",
+    "case_study/LICENSE.txt": "1eb85fc97224598dad1852b5d6483bbcf0aa8608790dcc657a5a2a761ae9c8c6",
+    "case_study/run_case.py": "a9f4093dec11495dbab645e1a878267f64f2eb1727d75d90f3dbc81883996bd7",
+    "case_study/verify_case.py": "85e50d211e32d861b35b09400714b57089a651a54c5155af0c439a532858acab",
+    "case_study/inputs/harbor-data-policy.txt": "e2ad77672b79eea4a09315168588692bf74b56f86623ad2a6c542c66fa1d1010",
+    "case_study/inputs/harbor-operations.txt": "627fb5e206dc5ef800db7efc095dbe14274c0fb7b3ef5032adc16fddf5ea6c36",
+    "case_study/records/after-cli-rendered.txt": "4e85c933c786ecd25691190b912f68774f15542b603402005ff2c198fb72a1e8",
+    "case_study/records/after-provider-calls.json": "fdd3b9c3dba4c81ad22d1bb2697590d4684b0cfb23fa50968795f417dc38737e",
+    "case_study/records/after-request.json": "67417802c58130d5e369aebdef8a8b8d704f19b5a96246804612043d000628eb",
+    "case_study/records/after-response.json": "47fc07ca8b66cdec5ebc9c2339282b56a3a220d912de6a0f22bff801aef2f18e",
+    "case_study/records/answer-stages.json": "92be96b9b84ea60f23af441b67a8555029fff179ca02281c46ac2ab0e68a06a2",
+    "case_study/records/before-cli-rendered.txt": "d30e54897b1f99339d5491756c9ced984620ceff821e8bc674a2b4684e2256fc",
+    "case_study/records/before-provider-calls.json": "1dd9122862d136ff8a1da92db83c3789c6afc904d570ef4dd1f062283eace324",
+    "case_study/records/before-request.json": "f09e71ae5d886244658cce3ba703365dbab86c9edd762c5f95cd78bf5fdb8ff0",
+    "case_study/records/before-response.json": "14b86014a5c689392ed0709517fce5cfab9a8975eeadbe79ae886771595f4a41",
+    "case_study/records/effective-config.json": "39da5661c949454041f59b0c583df5aedf563463d233ccfbeae6eecc3296b151",
+    "case_study/records/recomputed-metrics.json": "7aa6226075516db026539ec261933ad5a3935c96bf3dd263b98e85af8c60429b",
+    "case_study/records/source-verification.json": "51cdd4478866d93bbd23574b2e04a6a342c4e9c83954cf2cd6373d557a4c13e3",
+    "case_study/repeat/after-provider-calls.json": "f6ef8abee7763ec5ab324c6ca4c3e9f2365876425d59b734608e79ec94a4155d",
+    "case_study/repeat/after-request.json": "dc5a247d6d583497c180e254268ead463f3e223a69419b4e636d05f89856ba1b",
+    "case_study/repeat/after-response.json": "c58b1d99ca4be61bbfe71e78514c98a6c36c7ea9a8d9d90dddc925da289aeaaf",
+    "case_study/repeat/before-provider-calls.json": "3bd1764ae399322802615815b917347133e51f51c061d50eca6c079332791b33",
+    "case_study/repeat/before-request.json": "79c7d2abb5554308439123e0532b8a77e9e75af083ccc62edaa0efeed38d19cc",
+    "case_study/repeat/before-response.json": "2b4d6671a446ed2ad4542077ea3dbcc9835f37d51856babda983853d800ea7c9",
+    "case_study/repeat/index.json": "b4d352c217ae5dcfea6ad6fca98942ef05cd9043e2ee1b6e42be10897fcb5b7e",
+    "case_study/repeat/summary.json": "675cd378bac8a7af1b87d84c4eb8ca7d6d3911e07201c87c24ee5e58c1956511",
+    "case_study/upstream/inspected-source.zip": "20cb27feea411d977a55a96b24b6b0d6a82192056a8e9d2f0d40829654a68a7e",
+    "case_study/upstream/provenance.json": "ed516d284e200d958ab9ab61d2fceb02e480ac6779c71de12414a4d99266d69d",
+    "source/diagnostic_tables.tex": "a6893c6827e3a1aeb2fad5d7e75cbf46369ee61f01befa2617a854f9a1d75384",
+    "source/references.bib": "1eaefb2b5f4ec7d389a9dadb3fbfebb59b0530060f803bb0e2dc3c4435539b50",
+    "source/acl.sty": "19dfeddc2c0e448f3926a0bef048a9db3f3611b46265b760caabd7ada4f361de",
+    "source/acl_natbib.bst": "6fbb306202290f4b68e74ac1460a8b27398500cb6dfeb4492e74c457eae7cd1e",
+    "source/figures/mara-ui-qa.png": "f6cdea3cabefafb58678c920e4dab95fb7ce8e00046b126d5bd94ecc4be9781e",
+    "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv": "904f7149037237790bf882a2bcd3399b109d6f06d6830630c613e9e690965e0f",
+    "audit/evidence-tables/statistical_failure_latency_backend_table.csv": "ce18654f93495a50ca89d17637bb084fea06fd26b8279ab082967d8d87025551",
+    "audit/evidence-tables/statistical_main_result_table.csv": "69d56a93f8e8f657a22e7c9ff971f86487e20d1fbf3c0663c2112f2d53f89aeb",
+    "audit/evidence-tables/statistical_win_loss_tie_table.csv": "78c8e992e9f3aa05ccabc7d9b8a1776ce78bc411c7de9429f770c5ecbd2a64c9"
+  },
+  "preserved_release_identifiers": [
+    "MARA",
+    "MARA-cli",
+    "MARA docqa",
+    "MARA.cmd",
+    "MARA_CASE_CHAT_API_KEY",
+    "MARA_CASE_EMBEDDING_API_KEY",
+    "https://github.com/262412/MARA",
+    "slide-app.zip"
+  ],
+  "remaining_tex_occurrences": [
+    {
+      "file": "appendix.tex",
+      "line": 8,
+      "text": "The scorer is implemented in \\path{libs/ktem/ktem/reasoning/mara_route_scorer.py}; cost adjustments and tie breaking are in \\path{mara_route_costing.py} in the same directory. For modality $m$, its probe confidence is zero if no evidence is present. Otherwise it is the clipped and four-decimal-rounded value"
+    },
+    {
+      "file": "appendix.tex",
+      "line": 57,
+      "text": "The relevant sources are \\path{libs/ktem/ktem/docqa/controller.py}, \\path{retrieval_adequacy.py}, \\path{verification.py}, and \\path{execution.py} in that DocQA directory, together with \\path{libs/ktem/ktem/reasoning/mara.py}."
+    },
+    {
+      "file": "appendix.tex",
+      "line": 66,
+      "text": "The source \\path{libs/ktem/ktem/reasoning/mara_visual_answering.py} can return an OCR-extracted short answer before calling a VLM. For benchmark-origin requests, it searches visual evidence text for short answer-bearing patterns. With no visual generator it can return an evidence-only message or let another generation path handle the request, depending on configuration. The synthesis column \\path{generator_backend} records configured identities such as \\path{Qwen/Qwen3-8B} and \\path{local_qwen3_vl}; the metric CSV does not contain the per-answer \\path{generation_backend} or \\path{visual_generation_gate} fields needed to identify these paths. A future generator comparison must export those fields and generated answers before attributing differences to a VLM."
+    },
+    {
+      "file": "appendix.tex",
+      "line": 127,
+      "text": "\\url{https://github.com/262412/MARA/releases/tag/v0.0.40}."
+    },
+    {
+      "file": "appendix.tex",
+      "line": 129,
+      "text": "\\path{mara-full-system-benchmark-synthesis-v0.0.40.zip},"
+    },
+    {
+      "file": "appendix.tex",
+      "line": 131,
+      "text": "\\url{https://github.com/262412/MARA};"
+    },
+    {
+      "file": "appendix.tex",
+      "line": 139,
+      "text": "In the Web UI's resources tab, configure a chat model and an embedding model using the user's own local services or API credentials. Import the included sample document, wait for indexing to finish, and ask a question. The interface displays the answer, citations, and reasoning status. The package README provides the sample question, model-configuration instructions, and CLI usage through \\path{MARA.cmd}. Model weights and credentials are supplied by the user."
+    },
+    {
+      "file": "appendix.tex",
+      "line": 142,
+      "text": "LMDoc is the system name used throughout this paper. The unchanged video, interface screenshot, and downloadable software retain the original release name MARA. Commands and diagnostic records preserve their released identifiers. The video illustrates source selection, page preview, text questions, citations, and the reasoning-status card. Its user deployment uses Deepseek/Google APIs and a packaged UI label of 0.0.18. The benchmark identifies Qwen3-8B/bge-m3 and the repository release \\path{v0.0.40}. These are deployment and distribution identifiers, not interchangeable claims about one executable. In the released code, the displayed app version may come from \\path{KH_APP_VERSION} or installed package metadata; a UI version string alone is not a source-commit identifier. We do not infer binary equivalence between the recording and benchmark release."
+    },
+    {
+      "file": "diagnostic_case.tex",
+      "line": 6,
+      "text": "With only the operating guide selected, the user receives the generic message ``MARA could not retrieve enough evidence to answer reliably.'' Opening the structured response, however, shows \\texttt{route=doc\\_text} and retrieval \\texttt{status=good}. The captured provider call also completed. The blocking decision is instead verification \\texttt{status=unknown}, with guardrail \\texttt{action=abstain}. The evidence bundle names the operating guide and preserves its sentence directing the reader to the data policy (Figure~\\ref{fig:diagnosis}). Thus the message alone does not accurately localize the failed stage: retrieving a relevant document did not establish support for the requested duration."
+    },
+    {
+      "file": "paper_body.tex",
+      "line": 8,
+      "text": "LMDoc (released as MARA) addresses this inspection problem. It extends the open-source Kotaemon application \\citep{kotaemon} with an application-level controller, structured evidence and decision records, and a benchmark harness for examining the same runtime. The contribution is an integrated workbench for observing and diagnosing document QA. We do not introduce a trained routing model or claim that automatic routing improves QA accuracy."
+    },
+    {
+      "file": "paper_body.tex",
+      "line": 24,
+      "text": "\\includegraphics[width=0.96\\textwidth]{figures/mara-ui-qa.png}"
+    },
+    {
+      "file": "paper_body.tex",
+      "line": 25,
+      "text": "\\caption{LMDoc's document workspace, shown under the release name MARA: source selection, page preview, question answering, citations, and a compact route/retrieval/verification card. The diagnostic walkthrough in Figure~\\ref{fig:diagnosis} complements this existing text-workflow screenshot with captured decisions and an intervention.}"
+    },
+    {
+      "file": "paper_body.tex",
+      "line": 29,
+      "text": "The released implementation retains the public commands \\texttt{MARA} and \\texttt{MARA-cli}, which expose application startup and document-QA operations. The \\texttt{MARA docqa} group supports indexing, file inspection, questions, saved conversations, source selection, notes, and derived study artifacts. Optional agent-platform wrappers invoke these commands. The Web and CLI surfaces reuse DocQA settings, indices, and persisted state, while the benchmark drives that runtime through dataset and route adapters. Multiple entry points remain and require compatibility checks; shared records do not by themselves prove behavior is identical across every interface."
+    },
+    {
+      "file": "paper_body.tex",
+      "line": 138,
+      "text": "The existing screencast shows the workbench under its original release name, MARA; this paper refers to it as LMDoc. The recording and Figure~\\ref{fig:ui} retain that interface label; commands and captured outputs also retain their release names. The screencast demonstrates the user workflow: selecting a document, previewing pages, asking document questions, following citation chips, and inspecting route/retrieval/verification status. It uses a seven-page word-processing document and text evidence. The unchanged recording does not demonstrate visual reasoning, graph retrieval, recovery, or abstention. The supplementary offline walkthrough now demonstrates the captured verification refusal, source correction, and evidence-supported return; it does not add those scenes to the video."
+    },
+    {
+      "file": "paper_body.tex",
+      "line": 146,
+      "text": "\\item Downloadable installer and artifacts: \\url{https://github.com/262412/MARA/releases/tag/v0.0.40}."
+    },
+    {
+      "file": "paper_body.tex",
+      "line": 147,
+      "text": "\\item Repository: \\url{https://github.com/262412/MARA}."
+    }
+  ],
+  "remaining_occurrences_reviewed": true,
+  "naming_explanation_locations": [
+    "Introduction",
+    "Figure 1 caption",
+    "Section 5",
+    "Appendix C.2",
+    "Supplementary guide and walkthrough"
+  ],
+  "title_abstract_tldr_and_pdf_metadata_match": true,
+  "previous_paper_name_absent_from_current_packages_and_pdf": true,
+  "paper_links_unchanged": true
+}

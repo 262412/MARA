@@ -67,7 +67,9 @@ def _typescript_literal(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
-def _schema_type(schema: dict[str, Any]) -> str:
+def _schema_type(schema: dict[str, Any] | bool) -> str:
+    if isinstance(schema, bool):
+        return "unknown" if schema else "never"
     reference = schema.get("$ref")
     if reference:
         return str(reference).rsplit("/", 1)[-1]

@@ -1,24 +1,7 @@
 ﻿import html
 import json
 
-from ktem.pages.chat.knowledge_graph_service import GlobalKnowledgeGraphService
-
-
-class _DummyApp:
-    pass
-
-
-class _DummyIndex:
-    pass
-
-
-def _make_service(monkeypatch, tmp_path):
-    monkeypatch.setattr(
-        "ktem.pages.chat.knowledge_graph_service.flowsettings.KH_APP_DATA_DIR",
-        tmp_path,
-        raising=False,
-    )
-    return GlobalKnowledgeGraphService(_DummyApp(), _DummyIndex())
+from .graph_service_test_support import make_service as _make_service
 
 
 def test_conversation_graph_groups_related_and_unrelated_files(monkeypatch, tmp_path):

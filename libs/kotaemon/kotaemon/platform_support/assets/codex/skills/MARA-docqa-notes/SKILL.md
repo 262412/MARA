@@ -1,6 +1,6 @@
 ---
 name: MARA-docqa-notes
-description: Use when the user wants MARA DocQA notebook notes through `MARA docqa notes ...`.
+description: "Manage MARA DocQA notebook notes."
 version: 1.0.0
 ---
 

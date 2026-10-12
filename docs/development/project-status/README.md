@@ -12,12 +12,11 @@ Use these documents by role:
 | [Claim Boundaries](claim-boundaries.md)       | Dissertation and proposal-facing claim limits                              | Canonical claim source        |
 | [Evaluation Protocol](evaluation-protocol.md) | Route matrix and evaluator authority freeze draft                          | Canonical protocol draft      |
 | [Residual Risks](residual-risks.md)           | Items still requiring benchmark evidence, paper results, or demo rehearsal | Canonical remaining-work list |
-| [Archive](archive/README.md)                  | Historical implementation plan index and provenance notes                  | Historical only               |
 
-Related documents such as proposal drafts, thesis MVP scope, benchmark README,
-release-flow notes, superpowers plans, and superpowers specs are indexed from
-[Archive](archive/README.md). They remain useful references, but they are not
-current completion-status sources.
+Proposal drafts and the thesis MVP remain research inputs. Operational guidance
+lives in the [benchmark README](../../../benchmark/README.md) and
+[CLI release guide](../../mara_research_cli_release.md). Superseded task plans
+and design drafts are available in Git history.
 
 ## Status Rules
 

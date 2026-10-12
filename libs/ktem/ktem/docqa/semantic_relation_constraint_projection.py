@@ -122,7 +122,10 @@ def evidence_set_reason(
             return "local_semantic_relation_unresolved"
         return ""
     if verdict == "no":
-        if no_evidence_semantics.get("classification") == "explicit_negation" and any(
+        if no_evidence_semantics.get("classification") in {
+            "explicit_negation",
+            "explicit_ranking_contradiction",
+        } and any(
             value.get("direct_relation_negated") is False
             and value.get("target_relation_present") is True
             and value.get("meta_scope") is not True

@@ -1,0 +1,17 @@
+{
+  "successes": [],
+  "failures": [
+    {
+      "file_path": "<RUN_ROOT>\\visual-live\\arctic-page9.pdf",
+      "file_name": "arctic-page9.pdf",
+      "status": "failed",
+      "message": "Error embedding content: 400 API key not valid. Please pass a valid API key. [reason: \"API_KEY_INVALID\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"generativelanguage.googleapis.com\"\n}\n, locale: \"en-US\"\nmessage: \"API key not valid. Please pass a valid API key.\"\n]"
+    }
+  ],
+  "debug_messages": [
+    "Indexing [1/1]: arctic-page9.pdf",
+    " => Converting arctic-page9.pdf to text",
+    " => Converted arctic-page9.pdf to text (parse cache miss; hits=0, misses=1, writes=1)",
+    " => [arctic-page9.pdf] Processed 2 chunks"
+  ]
+}

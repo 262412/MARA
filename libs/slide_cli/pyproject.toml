@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools==80.9.0", "wheel==0.45.1", "setuptools-git-versioning==2.1.0"]
+requires = ["setuptools==83.0.0", "wheel==0.46.2", "setuptools-git-versioning==2.1.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -16,7 +16,7 @@ tag_filter = "v?\\d+(\\.\\d+)*.*"
 [project]
 name = "mara-research-cli"
 dynamic = ["version"]
-requires-python = ">= 3.10"
+requires-python = ">=3.11,<3.13"
 description = "MARA research assistant CLI for document QA, study artifacts, and slide workflows."
 readme = "README.md"
 license = "Apache-2.0"

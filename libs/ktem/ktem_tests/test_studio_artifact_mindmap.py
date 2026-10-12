@@ -1,5 +1,6 @@
 from typing import Any
 
+import gradio as gr
 from ktem.pages.chat.studio_artifact_controls import (
     generate_studio_artifact_panel_update,
 )
@@ -122,7 +123,10 @@ def test_generate_studio_mindmap_uses_interactive_knowledge_graph(monkeypatch):
         "payload": saved[0]["payload"],
     }
     assert result[0] == "conv-graph"
-    assert result[1][-1][1] == "Interactive mind map generated."
+    # The graph service saves an artifact, not a conversation turn. Adding a
+    # synthetic message here misaligns the next answer's persisted citations.
+    assert result[1:4] == (gr.skip(), gr.skip(), gr.skip())
+    assert "Interactive mind map generated." in result[5]
     assert "controller-trace-card" not in result[7]
     assert "studio-artifact-result-list" in result[7]
     assert "Interactive Mind Map" in result[7]

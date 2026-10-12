@@ -12,6 +12,9 @@ def normalize_semantic_evaluator(value: str) -> str:
     if lowered in {"", "off", "none"}:
         return "off"
     if lowered in {
+        "on",
+        "true",
+        "1",
         "local",
         "local_qwen3_8b",
         "builtin:local_qwen3_8b",

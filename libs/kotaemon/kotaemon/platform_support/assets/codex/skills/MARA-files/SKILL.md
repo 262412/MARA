@@ -1,6 +1,6 @@
 ---
 name: MARA-files
-description: Use this skill for listing, inspecting, and filtering workspace files with `MARA files`.
+description: "List, inspect, or filter workspace files through MARA."
 version: 1.0.0
 ---
 

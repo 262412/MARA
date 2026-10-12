@@ -80,14 +80,6 @@ def test_two_line_shell_docs_cover_mara_model():
     release_doc = (REPO_ROOT / "docs" / "mara_research_cli_release.md").read_text(
         encoding="utf-8"
     )
-    two_line_shell_plan = (
-        REPO_ROOT
-        / "docs"
-        / "superpowers"
-        / "plans"
-        / "2026-04-22-mara-research-cli-two-line-shell-foundation.md"
-    ).read_text(encoding="utf-8")
-
     assert "## Use the CLI" in root_readme
     assert "### Slide tools and model routing" in root_readme
     assert "MARA docqa ask" in root_readme
@@ -113,4 +105,4 @@ def test_two_line_shell_docs_cover_mara_model():
         in release_doc
     )
     assert "`MARA docqa ...` is the specialist document-QA line" in release_doc
-    assert "two-line model" in two_line_shell_plan
+    assert "`MARA docqa ...` is the specialist document-QA line" in package_readme

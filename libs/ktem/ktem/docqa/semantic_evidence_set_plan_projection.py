@@ -65,6 +65,8 @@ def semantic_authority_plan_projection_from_decision(
 ) -> tuple[FrozenCanonicalPropositionEvidencePlan | None, str]:
     """Resolve the selected frozen plan from one semantic verifier decision."""
 
+    if not isinstance(bundle.metadata.get("qasper_canonical_semantic_pack"), Mapping):
+        return None, ""
     selected_id = str(_decision_value(decision, "selected_derivation_id", "") or "")
     results = _decision_value(decision, "claim_results", ()) or ()
     semantic_result = next(

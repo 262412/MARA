@@ -82,7 +82,12 @@ def chat_submit_ports(page: Any) -> ChatSubmitPorts:
         pdf_refresh=EventPorts(outputs=(page._preview_links,)),
         scroll=EventPorts(),
         suggest_name=EventPorts(
-            inputs=page._request_chat_history,
+            inputs=(
+                page.chat_control.conversation_id,
+                page._app.user_id,
+                page._request_chat_history,
+                page._request_completion,
+            ),
             outputs=(page.chat_control.conversation_rn, page._conversation_renamed),
         ),
         rename=_rename_ports(page),
@@ -160,6 +165,7 @@ def _runtime_ports(page: Any) -> EventPorts:
             page._request_info_html,
             page._request_answer_html,
             page._request_chat_history,
+            page._request_completion,
         ),
     )
 
@@ -167,6 +173,8 @@ def _runtime_ports(page: Any) -> EventPorts:
 def _cache_ports(page: Any) -> EventPorts:
     return EventPorts(
         inputs=(
+            page.chat_control.conversation_id,
+            page._request_completion,
             page._page_outputs_cache,
             page._request_page_number,
             page._request_last_question,
@@ -186,6 +194,8 @@ def _rename_ports(page: Any) -> EventPorts:
             page.chat_control.conversation_rn,
             page._conversation_renamed,
             page._app.user_id,
+            page._request_chat_history,
+            page._request_completion,
         ),
         outputs=(
             page.chat_control.conversation,
@@ -207,6 +217,7 @@ def _persist_ports(page: Any) -> EventPorts:
             page._request_chat_history,
             page.state_chat,
             page._graph_source_ids,
+            page._request_completion,
             *page._indices_input,
         ),
         outputs=(page.state_retrieval_history, page.state_plot_history),
@@ -241,7 +252,12 @@ def chat_conversation_ports(page: Any, *, demo_mode: bool) -> ChatConversationPo
             inputs=(page.state_retrieval_history,), outputs=(page.citations_panel,)
         ),
         reasoning=EventPorts(
-            inputs=(page.chat_panel.chatbot, page.state_retrieval_history),
+            inputs=(
+                page.chat_panel.chatbot,
+                page.state_retrieval_history,
+                page.chat_control.conversation_id,
+                page._app.user_id,
+            ),
             outputs=(page.reasoning_trace_panel,),
         ),
         last_question=EventPorts(outputs=(page._last_question,)),
@@ -305,6 +321,7 @@ def _conversation_selection_ports(page: Any) -> EventPorts:
             page.chat_control.cb_is_public,
             page.state_chat,
             *page._indices_input,
+            page._page_outputs_cache,
         ),
     )
 

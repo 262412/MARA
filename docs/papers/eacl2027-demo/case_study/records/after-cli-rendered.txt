@@ -1,0 +1,9 @@
+Conversation: c1a40fb38f2b4d2896f85fcd71af3fb5
+Active file: harbor-data-policy.txt
+
+The Harbor sensor pilot retains raw sensor logs for exactly 17 days 【1】.
+
+Route: Document
+Retrieval: good
+Verification: supported (generate)
+Modalities: text

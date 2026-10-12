@@ -7,6 +7,8 @@ import gradio as gr
 from ktem.app import BasePage
 from theflow.settings import settings as flowsettings
 
+from .chat_history import ConversationChatbot
+
 KH_DEMO_MODE = getattr(flowsettings, "KH_DEMO_MODE", False)
 
 # Placeholder text shown in chatbot based on mode
@@ -40,14 +42,14 @@ class ChatPanel(BasePage):
     def render_preview_frame(self):
         """Render the hidden chat history and central page preview frame."""
         # Chatbot for displaying conversations
-        self.chatbot = gr.Chatbot(
+        self.chatbot = ConversationChatbot(
             label=self._app.app_name,
             placeholder=PLACEHOLDER_TEXT,
             show_label=False,
             elem_id="main-chat-bot",
-            show_copy_button=True,
-            likeable=True,
-            bubble_full_width=False,
+            buttons=["copy"],
+            allow_tags=False,
+            group_consecutive_messages=False,
             visible=False,
             latex_delimiters=[
                 {"left": "$$", "right": "$$", "display": True},
@@ -74,7 +76,7 @@ class ChatPanel(BasePage):
         )
         # Hidden textbox storing the preview source URL
         self.pdf_preview_src = gr.Textbox(
-            value="", visible=False, elem_id="main-pdf-preview-src"
+            value="", visible="hidden", elem_id="main-pdf-preview-src"
         )
         self.preview_refresh_timer = gr.Timer(value=2.0, active=True)
 

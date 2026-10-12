@@ -217,14 +217,10 @@ def canonical_evidence_set_analysis(
         and no_semantics["admissible_as_explicit_contradiction"] is not True
     ):
         rejection_reasons.append("explicit_contradiction_missing")
-    if (
-        polarity_relation == "explicit_contradiction"
-        and no_semantics["classification"] == "explicit_negation"
-        and any(
-            "predicate" in (selector.get("slot_hints") or [])
-            and selector.get("local_relation_state") == "affirmative_assertion"
-            for selector in ordered
-        )
+    if _explicit_contradiction_conflict(
+        polarity_relation,
+        str(no_semantics["classification"]),
+        ordered,
     ):
         rejection_reasons.append("explicit_contradiction_relation_conflict")
     if covered_object_tokens != required_object_tokens:
@@ -273,6 +269,22 @@ def canonical_evidence_set_analysis(
         ),
         "same_event": len(_event_ids(ordered)) <= 1,
     }
+
+
+def _explicit_contradiction_conflict(
+    polarity_relation: str,
+    classification: str,
+    selected: Sequence[Mapping[str, Any]],
+) -> bool:
+    return (
+        polarity_relation == "explicit_contradiction"
+        and classification in {"explicit_negation", "explicit_ranking_contradiction"}
+        and any(
+            "predicate" in (selector.get("slot_hints") or [])
+            and selector.get("local_relation_state") == "affirmative_assertion"
+            for selector in selected
+        )
+    )
 
 
 def _structural_reason(

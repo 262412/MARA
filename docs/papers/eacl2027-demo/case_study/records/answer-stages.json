@@ -1,0 +1,22 @@
+{
+  "before": {
+    "raw_provider_text": [
+      "CITATION LIST\n\nCITATION【1】\n\nSTART_PHRASE: Data retention is specified in the\nEND_PHRASE: guide does not state a duration.\n\nFINAL ANSWER\nThe provided context does not state how many days the Harbor sensor pilot retains raw sensor logs. The operating instructions explicitly say that data retention is specified in the separate Harbor data policy, and that this operating guide does not state a duration【1】. Therefore, the number of days cannot be determined from the given document."
+    ],
+    "pre_verification_answer": "The provided context does not state how many days the Harbor sensor pilot retains raw sensor logs.\nThe operating instructions explicitly say that data retention is specified in the separate Harbor data policy\nthat this operating guide does not state a duration 【1】.\nTherefore, the number of days cannot be determined from the given document.",
+    "pre_guardrail_answer": "Therefore, the number of days cannot be determined from the given document.",
+    "answer_for_user": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+    "answer_for_scoring": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+    "scoring_projection": "identity: score exactly the displayed answer; not the historical benchmark adapter"
+  },
+  "after": {
+    "raw_provider_text": [
+      "CITATION LIST\n\nCITATION【1】\n\nSTART_PHRASE: The Harbor sensor pilot retains raw\nEND_PHRASE: sensor logs for exactly 17 days.\n\nFINAL ANSWER\nThe Harbor sensor pilot retains raw sensor logs for exactly 17 days【1】. The policy requires deleting raw sensor logs after 17 days, while aggregated daily summaries are kept separately and are not covered by this raw-log retention period【1】."
+    ],
+    "pre_verification_answer": "The Harbor sensor pilot retains raw sensor logs for exactly 17 days 【1】.\nThe policy requires deleting raw sensor logs after 17 days\naggregated daily summaries are kept separately and are not covered by this raw-log retention period 【1】.",
+    "pre_guardrail_answer": "The Harbor sensor pilot retains raw sensor logs for exactly 17 days 【1】.",
+    "answer_for_user": "The Harbor sensor pilot retains raw sensor logs for exactly 17 days 【1】.",
+    "answer_for_scoring": "The Harbor sensor pilot retains raw sensor logs for exactly 17 days 【1】.",
+    "scoring_projection": "identity: score exactly the displayed answer; not the historical benchmark adapter"
+  }
+}

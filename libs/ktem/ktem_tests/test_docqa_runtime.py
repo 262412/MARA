@@ -208,7 +208,7 @@ def test_runtime_persists_mara_artifact_to_notebook(monkeypatch):
         conversation_id = conversation.id
 
     runtime = _make_mara_runtime()
-    runtime.get_conversation_graph_cache = lambda _conversation_id: {}
+    runtime.get_conversation_graph_cache = lambda _conversation_id, **_kwargs: {}
     runtime.load_session = lambda _conversation_id, user_id=None: _make_docqa_session(
         conversation_id, {"origin": "cli"}
     )

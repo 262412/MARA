@@ -1,0 +1,37 @@
+{
+  "base_source": "e6afa5dcda18ef6d5d6aae2efb0f1a6b806187b3",
+  "regression_commit": "39d9b248",
+  "repair_commit": "9472e9e19a598ef522acd52ad88aa08da6a666a5",
+  "execution_date": "2026-09-23",
+  "runtime": "Installed Windows reviewer environment with source-path overlay",
+  "installer_updated": false,
+  "video_updated": false,
+  "harbor": {
+    "design": "Five predeclared pairs; fresh conversation per turn, all retained",
+    "chat_model": "deepseek-v4-flash",
+    "embedding_model": "text-embedding-3-large",
+    "snapshot_pinned": false,
+    "verification": "strict"
+  },
+  "visual": {
+    "design": "Adaptive walkthrough: complex question fails before generation; direct-reading auto/text gives wrong value; manually request page-image; image-removed generation control",
+    "chat_model": "gpt-4.1-mini-2025-04-14",
+    "verification": "off",
+    "source_url": "https://www.nasa.gov/wp-content/uploads/2024/01/noaa-nasa-global-analysis-2023.pdf",
+    "source_pdf_sha256": "f8716a707b54edbdef9e03badc26b3987139313d526041e4de38b817cf3b0743",
+    "original_page": 9,
+    "excerpt_page": 1,
+    "retriever": "local_late_interaction (deterministic single-page selector)",
+    "manual_intervention": true,
+    "automatic_recovery_demonstrated": false
+  },
+  "redactions": "Credential-free records only; machine-local absolute path prefixes replaced. No answer/evidence words, routes, or outcomes changed.",
+  "image_serialization": "Data URLs externalized losslessly as PNG plus SHA-256 and original encoding prefix. Reconstruct by encoding those exact bytes.",
+  "historical_slidevqa_outputs_recovered": false,
+  "public_recipe_validation": {
+    "executed": true,
+    "exit_code": 0,
+    "records": "recipe_validation/",
+    "interpretation": "Fresh execution of the supplied chart script on the same page/question; not a second independent task."
+  }
+}

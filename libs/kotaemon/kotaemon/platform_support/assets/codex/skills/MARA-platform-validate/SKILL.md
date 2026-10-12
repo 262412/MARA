@@ -1,6 +1,6 @@
 ---
 name: MARA-platform-validate
-description: Use when the user wants to validate source or installed Codex and Claude Code platform support assets through `MARA platform validate`.
+description: "Validate source or installed MARA coding-platform assets."
 version: 1.0.0
 ---
 

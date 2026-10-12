@@ -203,6 +203,7 @@ def test_gradio_launch_receives_selected_password_auth(monkeypatch, tmp_path):
 
     class _App:
         _favicon = "favicon.svg"
+        gradio_launch_kwargs = {"css": ".mara { color: red; }"}
 
         def make(self):
             return _Demo()
@@ -231,6 +232,7 @@ def test_gradio_launch_receives_selected_password_auth(monkeypatch, tmp_path):
 
     assert launched["server_name"] == "127.0.0.1"
     assert launched["auth"] is config.auth
+    assert launched["css"] == _App.gradio_launch_kwargs["css"]
     assert launched["share"] is True
 
 

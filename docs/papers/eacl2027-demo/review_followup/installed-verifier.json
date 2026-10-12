@@ -1,0 +1,303 @@
+{
+  "module": "D:\\MARA-reviewer-tests\\Final Review\\MARA-reviewer-windows-x64-e6afa5dc\\runtime\\environment\\lib\\site-packages\\ktem\\docqa\\claim_support.py",
+  "recorded_decision": {
+    "mode": "strict",
+    "status": "unsupported",
+    "reason": "Strict verification supported the core claim but found unsupported or conflicting extensions.",
+    "action": "revise",
+    "claims": [
+      "The Harbor sensor pilot retains raw sensor logs for exactly 17 days 【1】.",
+      "The policy states that raw sensor logs must be deleted after 17 days it applies specifically to raw sensor logs collected by the Harbor pilot."
+    ],
+    "unsupported_claims": [
+      "The policy states that raw sensor logs must be deleted after 17 days it applies specifically to raw sensor logs collected by the Harbor pilot."
+    ],
+    "unknown_claims": [
+      "The policy states that raw sensor logs must be deleted after 17 days it applies specifically to raw sensor logs collected by the Harbor pilot."
+    ],
+    "verified_citations": [
+      "evidence:6e14c120-f3b8-4e96-ac24-5fcd2b65cf55:909c12b6-1a81-407e-b0ab-554381591f67"
+    ],
+    "claim_results": [
+      {
+        "claim_id": "claim:1",
+        "claim": "The Harbor sensor pilot retains raw sensor logs for exactly 17 days 【1】.",
+        "status": "supported",
+        "supporting_evidence_ids": [
+          "evidence:6e14c120-f3b8-4e96-ac24-5fcd2b65cf55:909c12b6-1a81-407e-b0ab-554381591f67"
+        ],
+        "contradicting_evidence_ids": [],
+        "input_answer_polarity": "",
+        "canonical_answer_polarity": "",
+        "semantic_correction_applied": false,
+        "authority_status": "",
+        "authoritative_evidence_id": "",
+        "authoritative_evidence_ref": "",
+        "authoritative_span_id": "",
+        "authoritative_quote": "",
+        "authoritative_span_start": null,
+        "authoritative_span_end": null,
+        "authoritative_canonical_start": null,
+        "authoritative_canonical_end": null,
+        "actor": "",
+        "section_scope": "",
+        "relation": "",
+        "object": "",
+        "predicate_arguments": [],
+        "qualifier": "",
+        "quantifier": "",
+        "supporting_evidence_spans": [],
+        "contradicting_evidence_spans": [],
+        "authority_derivations": [],
+        "selected_derivation_id": "",
+        "authoritative_conflict": {},
+        "verified_slot_state": "",
+        "predicate": "",
+        "arguments": [],
+        "scope": ""
+      },
+      {
+        "claim_id": "claim:2",
+        "claim": "The policy states that raw sensor logs must be deleted after 17 days it applies specifically to raw sensor logs collected by the Harbor pilot.",
+        "status": "unknown",
+        "supporting_evidence_ids": [],
+        "contradicting_evidence_ids": [],
+        "input_answer_polarity": "",
+        "canonical_answer_polarity": "",
+        "semantic_correction_applied": false,
+        "authority_status": "",
+        "authoritative_evidence_id": "",
+        "authoritative_evidence_ref": "",
+        "authoritative_span_id": "",
+        "authoritative_quote": "",
+        "authoritative_span_start": null,
+        "authoritative_span_end": null,
+        "authoritative_canonical_start": null,
+        "authoritative_canonical_end": null,
+        "actor": "",
+        "section_scope": "",
+        "relation": "",
+        "object": "",
+        "predicate_arguments": [],
+        "qualifier": "",
+        "quantifier": "",
+        "supporting_evidence_spans": [],
+        "contradicting_evidence_spans": [],
+        "authority_derivations": [],
+        "selected_derivation_id": "",
+        "authoritative_conflict": {},
+        "verified_slot_state": "",
+        "predicate": "",
+        "arguments": [],
+        "scope": ""
+      }
+    ],
+    "input_answer_polarity": "",
+    "canonical_answer_polarity": "",
+    "semantic_correction_applied": false,
+    "boolean_authority_status": "",
+    "authoritative_evidence_id": "",
+    "authoritative_evidence_ref": "",
+    "authoritative_span_id": "",
+    "authoritative_quote": "",
+    "authoritative_span_start": null,
+    "authoritative_span_end": null,
+    "authoritative_canonical_start": null,
+    "authoritative_canonical_end": null,
+    "actor": "",
+    "section_scope": "",
+    "relation": "",
+    "object": "",
+    "predicate_arguments": [],
+    "qualifier": "",
+    "quantifier": "",
+    "verified_support_slot_ids": [],
+    "authority_derivations": [],
+    "selected_derivation_id": "",
+    "authoritative_conflict": {},
+    "typed_authority": {},
+    "candidate_contract_id": "",
+    "candidate_label": "",
+    "verifier_input_candidate": "",
+    "verifier_candidate_status": "",
+    "replacement_candidate_allowed": false,
+    "predicate": "",
+    "arguments": [],
+    "scope": ""
+  },
+  "replayed_decision": {
+    "mode": "strict",
+    "status": "unsupported",
+    "reason": "Strict verification supported the core claim but found unsupported or conflicting extensions.",
+    "action": "revise",
+    "claims": [
+      "The Harbor sensor pilot retains raw sensor logs for exactly 17 days 【1】.",
+      "The policy states that raw sensor logs must be deleted after 17 days it applies specifically to raw sensor logs collected by the Harbor pilot."
+    ],
+    "unsupported_claims": [
+      "The policy states that raw sensor logs must be deleted after 17 days it applies specifically to raw sensor logs collected by the Harbor pilot."
+    ],
+    "unknown_claims": [
+      "The policy states that raw sensor logs must be deleted after 17 days it applies specifically to raw sensor logs collected by the Harbor pilot."
+    ],
+    "verified_citations": [
+      "evidence:6e14c120-f3b8-4e96-ac24-5fcd2b65cf55:909c12b6-1a81-407e-b0ab-554381591f67"
+    ],
+    "claim_results": [
+      {
+        "claim_id": "claim:1",
+        "claim": "The Harbor sensor pilot retains raw sensor logs for exactly 17 days 【1】.",
+        "status": "supported",
+        "supporting_evidence_ids": [
+          "evidence:6e14c120-f3b8-4e96-ac24-5fcd2b65cf55:909c12b6-1a81-407e-b0ab-554381591f67"
+        ],
+        "contradicting_evidence_ids": [],
+        "input_answer_polarity": "",
+        "canonical_answer_polarity": "",
+        "semantic_correction_applied": false,
+        "authority_status": "",
+        "authoritative_evidence_id": "",
+        "authoritative_evidence_ref": "",
+        "authoritative_span_id": "",
+        "authoritative_quote": "",
+        "authoritative_span_start": null,
+        "authoritative_span_end": null,
+        "authoritative_canonical_start": null,
+        "authoritative_canonical_end": null,
+        "actor": "",
+        "section_scope": "",
+        "relation": "",
+        "object": "",
+        "predicate_arguments": [],
+        "qualifier": "",
+        "quantifier": "",
+        "supporting_evidence_spans": [],
+        "contradicting_evidence_spans": [],
+        "authority_derivations": [],
+        "selected_derivation_id": "",
+        "authoritative_conflict": {},
+        "verified_slot_state": "",
+        "predicate": "",
+        "arguments": [],
+        "scope": ""
+      },
+      {
+        "claim_id": "claim:2",
+        "claim": "The policy states that raw sensor logs must be deleted after 17 days it applies specifically to raw sensor logs collected by the Harbor pilot.",
+        "status": "unknown",
+        "supporting_evidence_ids": [],
+        "contradicting_evidence_ids": [],
+        "input_answer_polarity": "",
+        "canonical_answer_polarity": "",
+        "semantic_correction_applied": false,
+        "authority_status": "",
+        "authoritative_evidence_id": "",
+        "authoritative_evidence_ref": "",
+        "authoritative_span_id": "",
+        "authoritative_quote": "",
+        "authoritative_span_start": null,
+        "authoritative_span_end": null,
+        "authoritative_canonical_start": null,
+        "authoritative_canonical_end": null,
+        "actor": "",
+        "section_scope": "",
+        "relation": "",
+        "object": "",
+        "predicate_arguments": [],
+        "qualifier": "",
+        "quantifier": "",
+        "supporting_evidence_spans": [],
+        "contradicting_evidence_spans": [],
+        "authority_derivations": [],
+        "selected_derivation_id": "",
+        "authoritative_conflict": {},
+        "verified_slot_state": "",
+        "predicate": "",
+        "arguments": [],
+        "scope": ""
+      }
+    ],
+    "input_answer_polarity": "",
+    "canonical_answer_polarity": "",
+    "semantic_correction_applied": false,
+    "boolean_authority_status": "",
+    "authoritative_evidence_id": "",
+    "authoritative_evidence_ref": "",
+    "authoritative_span_id": "",
+    "authoritative_quote": "",
+    "authoritative_span_start": null,
+    "authoritative_span_end": null,
+    "authoritative_canonical_start": null,
+    "authoritative_canonical_end": null,
+    "actor": "",
+    "section_scope": "",
+    "relation": "",
+    "object": "",
+    "predicate_arguments": [],
+    "qualifier": "",
+    "quantifier": "",
+    "verified_support_slot_ids": [],
+    "authority_derivations": [],
+    "selected_derivation_id": "",
+    "authoritative_conflict": {},
+    "typed_authority": {},
+    "candidate_contract_id": "",
+    "candidate_label": "",
+    "verifier_input_candidate": "",
+    "verifier_candidate_status": "",
+    "replacement_candidate_allowed": false,
+    "predicate": "",
+    "arguments": [],
+    "scope": ""
+  },
+  "details": [
+    {
+      "claim": "The Harbor sensor pilot retains raw sensor logs for exactly 17 days 【1】.",
+      "evidence_checks": [
+        {
+          "claim_tokens": [
+            "days",
+            "exactly",
+            "harbor",
+            "logs",
+            "pilot",
+            "retain",
+            "sensor"
+          ],
+          "missing_tokens": [],
+          "support": true,
+          "conflicts": []
+        }
+      ]
+    },
+    {
+      "claim": "The policy states that raw sensor logs must be deleted after 17 days it applies specifically to raw sensor logs collected by the Harbor pilot.",
+      "evidence_checks": [
+        {
+          "claim_tokens": [
+            "apply",
+            "collected",
+            "days",
+            "deleted",
+            "harbor",
+            "logs",
+            "must",
+            "pilot",
+            "policy",
+            "sensor",
+            "specifically",
+            "state"
+          ],
+          "missing_tokens": [
+            "deleted",
+            "must",
+            "specifically",
+            "state"
+          ],
+          "support": false,
+          "conflicts": []
+        }
+      ]
+    }
+  ]
+}

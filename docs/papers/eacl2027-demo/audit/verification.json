@@ -1,0 +1,200 @@
+{
+  "checked_at_utc": "2026-09-22T02:15:15.096396+00:00",
+  "scope": "Read-only manuscript and submission audit; no source edits or benchmark reruns.",
+  "archive_sha256": "57517b15761050d80902c5cfeea6244566d67291d26a23b52e27b6b70583b3a1",
+  "source_file_count": 10,
+  "source_files": [
+    {
+      "path": "README-overleaf.txt",
+      "bytes": 251,
+      "sha256": "5715b500537c883da7e2bf14ef0d764dbdce2c488c478656e827891300a6057a",
+      "matches_archive": true
+    },
+    {
+      "path": "figures/mara-ui-qa.png",
+      "bytes": 651795,
+      "sha256": "f6cdea3cabefafb58678c920e4dab95fb7ce8e00046b126d5bd94ecc4be9781e",
+      "matches_archive": true
+    },
+    {
+      "path": "references.bib",
+      "bytes": 15712,
+      "sha256": "1eaefb2b5f4ec7d389a9dadb3fbfebb59b0530060f803bb0e2dc3c4435539b50",
+      "matches_archive": true
+    },
+    {
+      "path": "paper_venue.tex",
+      "bytes": 1212,
+      "sha256": "3fd67bb0ac764957147086d8396e6df10ede5d8bb081e48434ec40655129edab",
+      "matches_archive": true
+    },
+    {
+      "path": "paper_body.tex",
+      "bytes": 36983,
+      "sha256": "e55ec1852a0204c89b263ed4adc1d89c0f6d2602146f4b3eb503cd871d9a7491",
+      "matches_archive": true
+    },
+    {
+      "path": "paper_anonymous.tex",
+      "bytes": 1055,
+      "sha256": "4e018f00eee1f731c51b039cbc4005c6bd075b6d4cf0698ca95fd21497e4ca55",
+      "matches_archive": true
+    },
+    {
+      "path": "main.tex",
+      "bytes": 1512,
+      "sha256": "242fc570bfdd4e0a0523144a7201b11fca55c5962f19f5e241c712b167915ec7",
+      "matches_archive": true
+    },
+    {
+      "path": "appendix.tex",
+      "bytes": 10417,
+      "sha256": "952948be532cd74d740f92bad09c35023d97a4d186a24c22442950adef1a003b",
+      "matches_archive": true
+    },
+    {
+      "path": "acl_natbib.bst",
+      "bytes": 45442,
+      "sha256": "6fbb306202290f4b68e74ac1460a8b27398500cb6dfeb4492e74c457eae7cd1e",
+      "matches_archive": true
+    },
+    {
+      "path": "acl.sty",
+      "bytes": 11615,
+      "sha256": "19dfeddc2c0e448f3926a0bef048a9db3f3611b46265b760caabd7ada4f361de",
+      "matches_archive": true
+    }
+  ],
+  "official_style_comparison": [
+    {
+      "file": "acl.sty",
+      "url": "https://raw.githubusercontent.com/acl-org/acl-style-files/master/acl.sty",
+      "sha256": "19dfeddc2c0e448f3926a0bef048a9db3f3611b46265b760caabd7ada4f361de",
+      "identical_to_official": true
+    },
+    {
+      "file": "acl_natbib.bst",
+      "url": "https://raw.githubusercontent.com/acl-org/acl-style-files/master/acl_natbib.bst",
+      "sha256": "6fbb306202290f4b68e74ac1460a8b27398500cb6dfeb4492e74c457eae7cd1e",
+      "identical_to_official": true
+    }
+  ],
+  "compile_tool": "latex plugin compile_latex.py --compiler texlive --engine pdflatex; existing TeX Live 2025",
+  "entrypoints": [
+    {
+      "entry": "main.tex",
+      "build_exit_code": 0,
+      "pages": 9,
+      "main_content_pages": [
+        1,
+        6
+      ],
+      "reference_pages": [
+        7,
+        7
+      ],
+      "appendix_pages": [
+        8,
+        9
+      ],
+      "page_size_points": [
+        595.276,
+        841.89
+      ],
+      "incomplete_conditional_warning": true,
+      "enumitem_negative_labelwidth_warning": true,
+      "overfull_box_warning": false,
+      "undefined_reference_or_citation_warning": false,
+      "all_fonts_embedded": true,
+      "embedded_font_count": 6,
+      "visually_inspected_pages": [
+        3,
+        6
+      ]
+    },
+    {
+      "entry": "paper_venue.tex",
+      "build_exit_code": 1,
+      "pdf_exists": false,
+      "error": "Undefined control sequence: \\Xiao at paper_body.tex:21"
+    },
+    {
+      "entry": "paper_anonymous.tex",
+      "build_exit_code": 1,
+      "pdf_exists": false,
+      "error": "Undefined control sequence: \\Xiao at paper_body.tex:21"
+    }
+  ],
+  "abstract_whitespace_word_count": 148,
+  "review_source": "Author-provided transcription: one area-chair metareview and three reviewer reviews. Browser retrieval failed.",
+  "reviewer_issue_ids": [
+    "R01",
+    "R02",
+    "R03",
+    "R04",
+    "R05",
+    "R06",
+    "R07",
+    "R08",
+    "R09",
+    "R10",
+    "R11",
+    "R12",
+    "R13",
+    "R14",
+    "R15",
+    "R16",
+    "R17",
+    "R18",
+    "R19",
+    "R20",
+    "R21",
+    "R22",
+    "R23",
+    "R24"
+  ],
+  "additional_source_issue_ids": [
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S05",
+    "S06",
+    "S07",
+    "S08"
+  ],
+  "availability_checks": [
+    {
+      "url": "https://pypi.org/pypi/mara-research-cli/json",
+      "http_status": 404
+    },
+    {
+      "url": "https://test.pypi.org/pypi/mara-research-cli/json",
+      "http_status": 404
+    },
+    {
+      "url": "https://api.github.com/repos/262412/MARA/releases/tags/v0.0.40",
+      "http_status": 200,
+      "assets": [
+        {
+          "name": "slide-app.zip",
+          "bytes": 877687
+        },
+        {
+          "name": "mara-full-system-benchmark-synthesis-v0.0.40.zip",
+          "bytes": 1038051
+        }
+      ],
+      "installation_tested": false
+    }
+  ],
+  "not_performed": [
+    "Direct OpenReview review retrieval",
+    "Full benchmark recomputation",
+    "Submitted-version runtime/evaluator code audit",
+    "Clean installation and end-to-end QA",
+    "Video playback or duration verification",
+    "Manuscript or product modification",
+    "EACL form completion or submission"
+  ]
+}

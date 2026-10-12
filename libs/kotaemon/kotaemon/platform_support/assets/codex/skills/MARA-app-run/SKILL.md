@@ -1,6 +1,6 @@
 ---
 name: MARA-app-run
-description: Use when the user wants to launch the packaged Web UI through `MARA app run`.
+description: "Launch the MARA packaged Web UI with MARA app run."
 version: 1.0.0
 ---
 

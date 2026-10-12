@@ -1,0 +1,72 @@
+[
+  {
+    "repeat": 1,
+    "source": "before",
+    "answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+    "verification": "unknown",
+    "action": "abstain"
+  },
+  {
+    "repeat": 1,
+    "source": "after",
+    "answer": "The Harbor sensor pilot retains raw sensor logs for exactly 17 days 【1】.",
+    "verification": "supported",
+    "action": "return"
+  },
+  {
+    "repeat": 2,
+    "source": "before",
+    "answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+    "verification": "unsupported",
+    "action": "abstain"
+  },
+  {
+    "repeat": 2,
+    "source": "after",
+    "answer": "The Harbor sensor pilot retains raw sensor logs for exactly 17 days 【1】.",
+    "verification": "supported",
+    "action": "return"
+  },
+  {
+    "repeat": 3,
+    "source": "before",
+    "answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+    "verification": "unsupported",
+    "action": "abstain"
+  },
+  {
+    "repeat": 3,
+    "source": "after",
+    "answer": "The Harbor sensor pilot retains raw sensor logs for exactly 17 days 【1】. The policy states to delete raw sensor logs after 17 days 【1】.",
+    "verification": "supported",
+    "action": "return"
+  },
+  {
+    "repeat": 4,
+    "source": "before",
+    "answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+    "verification": "unsupported",
+    "action": "abstain"
+  },
+  {
+    "repeat": 4,
+    "source": "after",
+    "answer": "The Harbor sensor pilot retains raw sensor logs for exactly 17 days 【1】.\nIt deletes those raw sensor logs after 17 days 【1】.",
+    "verification": "supported",
+    "action": "return"
+  },
+  {
+    "repeat": 5,
+    "source": "before",
+    "answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+    "verification": "unknown",
+    "action": "abstain"
+  },
+  {
+    "repeat": 5,
+    "source": "after",
+    "answer": "The Harbor sensor pilot retains raw sensor logs for exactly 17 days 【1】.",
+    "verification": "supported",
+    "action": "return"
+  }
+]

@@ -91,7 +91,8 @@ export function Workspace({
   const previousWorkspaceId = useRef(workspaceId);
   const detail = session?.status === "success" ? session.data : undefined;
   const visibleTask =
-    answerTask && answerTask.conversation_id === detail?.conversation_id
+    answerTask && answerTask.conversation_id === detail?.conversation_id &&
+    !isEarlierSavedTask(detail, answerTask)
       ? answerTask
       : undefined;
   const active = visibleTask?.status === "queued" || visibleTask?.status === "running";
@@ -562,6 +563,17 @@ function Citations({ citations }: { citations: QueryCitation[] }) {
         </li>
       ))}
     </ol>
+  );
+}
+
+function isEarlierSavedTask(detail: SessionDetail, task: QueryTask): boolean {
+  if (task.status !== "success" || !task.answer_saved || !task.answer) {
+    return false;
+  }
+  return detail.messages.slice(0, -2).some((message, index, history) =>
+    message.role === "user" && message.content === task.prompt &&
+    history[index + 1]?.role === "assistant" &&
+    history[index + 1]?.content === task.answer,
   );
 }
 

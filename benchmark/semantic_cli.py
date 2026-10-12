@@ -8,8 +8,8 @@ def add_semantic_evaluator_options(parser: argparse.ArgumentParser) -> None:
         "--semantic-evaluator",
         default="off",
         help=(
-            "Offline semantic answer evaluator: off, local_qwen3_8b, or a "
-            "Python callable path."
+            "Offline semantic answer evaluator: off, on (local Qwen3-8B), "
+            "local_qwen3_8b, or a Python callable path."
         ),
     )
     parser.add_argument(

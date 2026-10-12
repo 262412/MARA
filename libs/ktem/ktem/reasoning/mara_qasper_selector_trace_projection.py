@@ -6,6 +6,66 @@ from typing import Any
 from ktem.docqa.qasper_semantic_pack_contract import canonical_payload_digest
 
 
+def candidate_record_occurrence_indices(
+    source: list[dict[str, Any]],
+    selected: list[dict[str, Any]],
+) -> list[int]:
+    """Map a projected record list back to source occurrences.
+
+    Evidence IDs are not sufficient here: the same source can occur more than
+    once after retrieval/window packing.  Match the stable record identity and
+    use selector overlap to distinguish duplicate occurrences whose canonical
+    selector set was changed by a later projection.
+    """
+
+    available = set(range(len(source)))
+    indices: list[int] = []
+    for record in selected:
+        candidates = [
+            index
+            for index in available
+            if _record_identity(source[index]) == _record_identity(record)
+        ]
+        if not candidates:
+            raise ValueError("canonical_selector_projection_occurrence_mismatch")
+        selected_index = max(
+            candidates,
+            key=lambda index: (
+                _selector_overlap(source[index], record),
+                -index,
+            ),
+        )
+        available.remove(selected_index)
+        indices.append(selected_index)
+    return indices
+
+
+def _record_identity(record: dict[str, Any]) -> tuple[str, str, int, str]:
+    return (
+        str(record.get("evidence_id") or ""),
+        str(record.get("label") or ""),
+        int(record.get("text_start") or 0),
+        str(record.get("text") or ""),
+    )
+
+
+def _selector_overlap(
+    first: dict[str, Any],
+    second: dict[str, Any],
+) -> int:
+    first_ids = {
+        str(selector.get("selector_id") or "")
+        for selector in first.get("selectors") or []
+        if isinstance(selector, dict)
+    }
+    second_ids = {
+        str(selector.get("selector_id") or "")
+        for selector in second.get("selectors") or []
+        if isinstance(selector, dict)
+    }
+    return len(first_ids & second_ids)
+
+
 def project_qasper_canonical_selector_trace(
     trace: dict[str, Any],
     *,

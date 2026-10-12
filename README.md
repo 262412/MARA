@@ -57,15 +57,15 @@ application interfaces.
 
 | Operating system | Web and CLI from source | Desktop distribution |
 | --- | --- | --- |
-| Windows | PowerShell installer; Python 3.10 | Windows x64 preview archive |
-| Linux | Bash installer; Python 3.10 | Linux x64 preview, built for Ubuntu 22.04; see the release's tested systems |
+| Windows | PowerShell installer; Python 3.11 | Windows x64 preview archive |
+| Linux | Bash installer; Python 3.11 | Linux x64 preview, built for Ubuntu 22.04; see the release's tested systems |
 | macOS | Bash installer is provided; native parsing dependencies need a compatible local setup | No macOS desktop package is documented or provided by the current packaging scripts |
 
 ## Install Web and CLI
 
 ### 1. Prepare the tools
 
-Install [Git](https://git-scm.com/downloads), a local **Python 3.10** interpreter,
+Install [Git](https://git-scm.com/downloads), a local **Python 3.11** interpreter,
 and **uv 0.11.19**, the version required by this checkout's
 [pyproject.toml](pyproject.toml).
 
@@ -75,11 +75,11 @@ Python downloads. For example, with Python available:
 ```shell
 python -m pip install "uv==0.11.19"
 uv --version
-uv python find 3.10
+uv python find 3.11
 ```
 
-On Windows, use `py -3.10 -m pip` if `python` does not select Python 3.10.
-On macOS/Linux, the interpreter may be named `python3.10`.
+On Windows, use `py -3.11 -m pip` if `python` does not select Python 3.11.
+On macOS/Linux, the interpreter may be named `python3.11`.
 
 The first install downloads the locked runtime dependencies and can take time.
 A local GPU is not required when using remote inference. Local models have their
@@ -93,7 +93,7 @@ on a package-index installation.
 ### 2. Clone and configure
 
 ```shell
-git clone https://github.com/262412/MARA.git
+git clone --branch Dev https://github.com/262412/MARA.git
 cd MARA
 ```
 
@@ -142,9 +142,23 @@ KH_OLLAMA_URL=http://localhost:11434/v1/
 Select the intended default **LLM** and **Embedding** in the Web resources panel.
 Setting a model name does not download or start that model.
 
+### Vector service and existing data
+
+The default vector store uses a shared Qdrant 1.19.2 or newer service for Web
+and CLI access. Configure `MARA_QDRANT_URL`, `MARA_QDRANT_API_KEY`, and a stable
+`MARA_QDRANT_NAMESPACE`. Keep persistent Qdrant data on a POSIX-compatible
+filesystem; Windows deployments can use storage inside a WSL2 Linux filesystem.
+
+Existing Chroma data requires an explicit, verified migration before the new
+runtime can open it. Back up the complete app data directory and keep the source
+stopped during export, import, and verification. See the [vector service and
+migration instructions](docs/development/data-components.md).
+
 ### 3. Install the locked runtime
 
-Run the installer from the primary checkout.
+Run `install.sh` (POSIX) or `install.ps1` (Windows) from the primary checkout.
+Only the installer synchronizes the canonical environment; keep workspace
+packages non-editable.
 
 Windows PowerShell:
 
@@ -380,7 +394,7 @@ while it is still generating.
 Desktop uses Electron and React with a bundled Python service. Current source
 includes native file import, background indexing, file management, conversation
 creation/search/rename/delete, document and multi-document questions, streamed
-answers, cancellation, and retry.
+answers, cancellation, retry, and baseline Resources, Settings, and Help pages.
 
 Page/selected-text scope, citation navigation and preview, Notes, Studio,
 complete resource/settings management, and data migration still have outstanding
@@ -418,7 +432,6 @@ requires **Node.js 22.12 or later** and npm.
 Windows PowerShell, from the repository root:
 
 ```powershell
-$env:MARA_DESKTOP_PYTHON = (Resolve-Path .venv\Scripts\python.exe).Path
 cd apps/desktop
 npm ci
 npm start
@@ -427,20 +440,28 @@ npm start
 Linux, from the repository root:
 
 ```bash
-export MARA_DESKTOP_PYTHON="$PWD/.venv/bin/python"
 cd apps/desktop
 npm ci
 npm start
 ```
 
-`npm start` builds the application and launches Electron.
+`npm start` builds the application and launches Electron. It selects the
+repository's `.venv` when present; use `MARA_DESKTOP_PYTHON` to choose another
+prepared interpreter.
 [Desktop development](apps/desktop/README.md) covers contracts, testing, and
 native packaging.
 
-Desktop uses its own data root: normally `%APPDATA%/MARA` on Windows and
-`$XDG_DATA_HOME/MARA` or `~/.local/share/MARA` on Linux.
-Do not assume it automatically opens an existing Web/CLI database or that
-simultaneous writes across interfaces are supported.
+To share configuration, indexed files, and conversations across Web, CLI, and
+Desktop, set the same absolute `MARA_APP_HOME` in each launch environment.
+For example, from the repository root, select an existing profile with
+`$env:MARA_APP_HOME = (Resolve-Path .mara/runtime).Path` in PowerShell or
+`export MARA_APP_HOME="$PWD/.mara/runtime"` in Bash before launching an interface.
+Use the same user and selected sources when continuing a conversation.
+
+Without `MARA_APP_HOME`, Desktop uses its own data root: normally
+`%APPDATA%/MARA` on Windows and `$XDG_DATA_HOME/MARA` or `~/.local/share/MARA`
+on Linux. Selecting a shared profile does not copy old data. Concurrent writes
+to the same conversation from multiple interfaces have not been validated.
 
 ## Configuration and data
 
@@ -449,15 +470,19 @@ simultaneous writes across interfaces are supported.
 | Repository `.env` and [flowsettings.py](flowsettings.py) | Source-workspace model defaults and application settings |
 | `MARA app init` | Creates user-level configuration templates; `app doctor` reports the effective paths |
 | User config `.env` / `flowsettings.py` | Packaged-runtime configuration when no workspace or explicit settings module takes precedence |
+| `MARA_APP_HOME` | Shared profile: `config/`, default `data/`, `cache/`, and Desktop state under `desktop/` |
 | `KH_APP_DATA_DIR` | Overrides the application's data directory |
 | `modelcli.yml` | Separate provider/alias configuration for `MARA model` and agent workflows |
-| Desktop Settings and its data directory | Desktop-owned model settings and application state |
+| Desktop Settings and its data directory | Model settings and application state for an independent Desktop profile |
 
-Runtime discovery checks an explicit `THEFLOW_SETTINGS_MODULE`, then a workspace
-`flowsettings.py`, then packaged defaults. Running from the repository and
-running from another directory can therefore select different settings.
+Web/CLI runtime discovery checks an explicit `THEFLOW_SETTINGS_MODULE`, then
+`MARA_APP_HOME`, then a workspace `flowsettings.py`, then packaged defaults.
+With `MARA_APP_HOME`, all three interfaces load its `config/.env` and
+`config/flowsettings.py`; `KH_APP_DATA_DIR` can override the profile's default
+data directory. Without an explicit profile, running inside and outside the
+repository can select different settings.
 Use `MARA app doctor` to check **Settings source**, **App data dir**, and
-**File storage** before expecting Web and CLI to share records.
+**File storage** before expecting the interfaces to share records.
 
 Source mode defaults to `ktem_app_data/`. The packaged runtime retains the
 platform-directory names **Cinnamon/Kotaemon** for compatibility; the command's
@@ -554,7 +579,7 @@ states, failures, and scoring provenance as well as aggregate metrics.
 
 | Symptom | Next check |
 | --- | --- |
-| `uv` rejects its version or cannot find Python | Use uv 0.11.19 and an existing Python 3.10 interpreter; installers do not download Python |
+| `uv` rejects its version or cannot find Python | Use uv 0.11.19 and an existing Python 3.11 interpreter; installers do not download Python |
 | `MARA` is not found after installation | Activate the correct environment or use its full executable path |
 | UI opens but indexing fails | Verify the default embedding provider, endpoint, credentials, and selected reader |
 | Editing `.env` has no effect | Check the effective settings source and saved model entries under resources |
@@ -589,17 +614,18 @@ In a prepared primary development environment, run focused checks without
 synchronizing dependencies:
 
 ```shell
-uv run --no-sync --python 3.10 python scripts/check_codebase_hygiene.py path/to/changed.py
+uv run --no-sync --python 3.11 python scripts/check_codebase_hygiene.py path/to/changed.py
 ```
 
 For CLI changes, run the package gate from `libs/slide_cli`:
 
 ```shell
-uv run --no-sync --python 3.10 python -m pytest -q
+uv run --no-sync --python 3.11 python -m pytest -q
 ```
 
 Do not refresh the hygiene baseline to hide a failing check.
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidance.
+See the [development guide](docs/development/contributing.md) and
+[CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidance.
 
 ## License and acknowledgements
 

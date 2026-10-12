@@ -1,6 +1,6 @@
 ---
 name: MARA-docqa-artifacts
-description: Use when the user wants generated MARA DocQA study artifacts through `MARA docqa artifacts ...`.
+description: "Generate MARA DocQA study artifacts from indexed sources."
 version: 1.0.0
 ---
 

@@ -3,8 +3,9 @@ from __future__ import annotations
 import logging
 import os
 import uuid
+from contextlib import AbstractContextManager, nullcontext
 from time import perf_counter
-from typing import Optional, Sequence, cast
+from typing import Callable, Optional, Sequence, cast
 
 from theflow.settings import settings as flowsettings
 
@@ -116,16 +117,23 @@ class VectorIndexing(BaseIndexing):
             logger.debug("Adding documents to doc store")
             self.doc_store.add(docs)
 
-    def add_to_vectorstore(self, docs: list[Document]):
+    def add_to_vectorstore(
+        self,
+        docs: list[Document],
+        *,
+        write_scope: Callable[[], AbstractContextManager] = nullcontext,
+    ):
         # in case we want to skip embedding
         if self.vector_store:
             logger.debug("Getting embeddings for %s nodes", len(docs))
             embeddings = self._embed_documents(docs)
-            logger.debug("Adding embeddings to vector store")
-            self.vector_store.add(
-                embeddings=embeddings,
-                ids=[t.doc_id for t in docs],
-            )
+        with write_scope():
+            if self.vector_store:
+                logger.debug("Adding embeddings to vector store")
+                self.vector_store.add(
+                    embeddings=embeddings,
+                    ids=[t.doc_id for t in docs],
+                )
 
     def _embed_documents(self, docs: list[Document]) -> list[DocumentWithEmbedding]:
         if not self.embedding_cache_dir:

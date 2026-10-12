@@ -1,0 +1,21 @@
+{
+  "command": [
+    "D:\\MARA-reviewer-test\\20260922T161319Z\\environments\\pypi\\Scripts\\python.exe",
+    "-m",
+    "pip",
+    "install",
+    "--index-url",
+    "https://test.pypi.org/simple/",
+    "--extra-index-url",
+    "https://pypi.org/simple",
+    "--disable-pip-version-check",
+    "--no-input",
+    "--timeout",
+    "15",
+    "--retries",
+    "1",
+    "mara-research-cli"
+  ],
+  "exit_code": 1,
+  "elapsed_seconds": 7.8
+}

@@ -23,7 +23,14 @@ from .domain_verifiers import (
 from .evidence import EvidenceBundle
 from .evidence_identity import identity_of
 from .evidence_text import evidence_text, extract_final_answer_text
+from .layered_claim_support import layered_claim_supporting_ids
 from .query_planning import request_planning_question
+from .verification_layered_policy import (
+    contradictory_extension_decision as _contradictory_extension_decision,
+)
+from .verification_layered_policy import (
+    contradictory_extensions as _contradictory_extensions,
+)
 from .verification_schema import VerifiedClaim, VerifyDecision
 
 
@@ -168,6 +175,14 @@ def verify_claim(
         for item in evidence_items
         if item_supports_claim(claim, item, prompt=prompt)
     ]
+    if not supporting:
+        supporting = list(
+            layered_claim_supporting_ids(
+                claim,
+                evidence_items,
+                prompt=prompt,
+            )
+        )
     contradicting = [
         identity_of(item).key
         for item in evidence_items
@@ -264,6 +279,39 @@ def _decision_for_claim_results(
             serialized,
             decision_metadata,
         )
+    contradictory_extensions = _contradictory_extensions(results)
+    if contradictory_extensions and results and results[0].status == "supported":
+        return _contradictory_extension_decision(
+            mode,
+            claims,
+            serialized,
+            contradictory_extensions,
+            decision_metadata,
+        )
+    return _claim_result_outcome(
+        mode,
+        retrieve_status,
+        claims,
+        results,
+        unsupported,
+        unknown,
+        citations,
+        serialized,
+        decision_metadata,
+    )
+
+
+def _claim_result_outcome(
+    mode: str,
+    retrieve_status: str,
+    claims: list[str],
+    results: list[VerifiedClaim],
+    unsupported: list[str],
+    unknown: list[str],
+    citations: list[str],
+    serialized: list[dict[str, Any]],
+    decision_metadata: dict[str, Any],
+) -> VerifyDecision:
     if unsupported:
         return _unsupported_claim_decision(
             mode,

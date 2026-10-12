@@ -35,11 +35,10 @@ The top-level line currently centers on:
 ## Install
 
 Use the [repository installation guide](../../README.md#install-web-and-cli)
-([中文](../../README.zh-CN.md#安装-web-与-cli)). It covers Python 3.10,
+([中文](../../README.zh-CN.md#安装-web-与-cli)). It covers Python 3.11,
 the required uv version, model configuration, and the Windows/POSIX installers.
 Run the installer from the primary checkout so the locked workspace packages
-remain non-editable. Public PyPI and TestPyPI metadata for `mara-research-cli`
-returned 404 when checked on 2026-09-10.
+remain non-editable.
 
 ## Verify
 

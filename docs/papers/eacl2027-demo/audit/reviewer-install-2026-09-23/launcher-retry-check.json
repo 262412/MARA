@@ -1,0 +1,27 @@
+{
+  "reason": "pip index control now successfully reads setuptools versions from public PyPI; retry the same package installation commands once.",
+  "stages": [
+    {
+      "stage": 1,
+      "command": [
+        "D:\\MARA-reviewer-test\\20260922T161319Z\\environments\\launcher\\Scripts\\python.exe",
+        "-m",
+        "pip",
+        "install",
+        "--index-url",
+        "https://pypi.org/simple",
+        "--disable-pip-version-check",
+        "--no-input",
+        "--timeout",
+        "20",
+        "--retries",
+        "1",
+        "-e",
+        "D:\\MARA-reviewer-test\\20260922T161319Z\\source-download\\MARA-0.0.40\\libs\\kotaemon"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 358.97,
+      "log": "logs\\launcher-retry-1.log"
+    }
+  ]
+}

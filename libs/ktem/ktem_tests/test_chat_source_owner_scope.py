@@ -125,7 +125,7 @@ def test_scope_and_sidebar_callbacks_receive_injected_request():
     ]
 
     for callback, component_inputs in callbacks:
-        injected, _, _ = special_args(
+        injected, _, _, _component_props = special_args(
             callback, inputs=list(component_inputs), request=request
         )
         assert injected == [*component_inputs, request]

@@ -5,6 +5,7 @@ from functools import cache
 from pathlib import Path
 from typing import Optional
 
+from ktem.llms.config import migrate_legacy_agent_spec
 from theflow.settings import settings
 from theflow.utils.modules import deserialize
 
@@ -49,7 +50,9 @@ class ModelPool:
         self._default: list[str] = []
 
         for name, model in conf.items():
-            self._models[name] = deserialize(model["spec"], safe=False)
+            self._models[name] = deserialize(
+                migrate_legacy_agent_spec(model["spec"]), safe=False
+            )
             if model.get("default", False):
                 self._default.append(name)
 

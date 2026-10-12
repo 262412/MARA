@@ -1,4 +1,5 @@
 import { packager } from "@electron/packager";
+import { cp } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -29,7 +30,14 @@ const appPaths = await packager({
   overwrite: true,
   asar: true,
   prune: true,
-  extraResource: [path.join(desktopRoot, "resources", "sidecar")],
+  afterComplete: [async ({ buildPath }) => {
+    // Keep PyInstaller's relative library links relative after relocation.
+    await cp(
+      path.join(desktopRoot, "resources", "sidecar"),
+      path.join(buildPath, "resources", "sidecar"),
+      { recursive: true, verbatimSymlinks: true },
+    );
+  }],
   ignore: [sourceDirectoryPattern, sourceFilePattern, compiledTestPattern],
 });
 

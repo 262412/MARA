@@ -50,13 +50,13 @@ def render_workbench_states(page: Any) -> None:
     page._graph_source_ids = gr.State([])
     page.first_selector_choices = gr.State(None)
     page._selected_page_text = gr.Textbox(
-        value="", visible=False, elem_id="selected-page-text"
+        value="", visible="hidden", elem_id="selected-page-text"
     )
     page._selected_graph_context = gr.Textbox(
-        value="", visible=False, elem_id="selected-graph-context"
+        value="", visible="hidden", elem_id="selected-graph-context"
     )
     page._chat_file_click = gr.Textbox(
-        value="", visible=False, elem_id="chat-file-click"
+        value="", visible="hidden", elem_id="chat-file-click"
     )
 
 
@@ -111,7 +111,12 @@ def render_chat_file_browser(page: Any) -> None:
             show_label=False,
             visible=True,
         )
-        page.chat_file_rows = gr.State([])
+        # The rows commit with the visible cards at the browser intent boundary.
+        page.chat_file_rows = gr.JSON(value=[], visible=False)
+        page._file_browser_result = gr.JSON(value=None, visible=False)
+        page._file_browser_stamp = gr.JSON(value=None, visible=False)
+        page._file_browser_selection_result = gr.JSON(value=None, visible=False)
+        page._file_browser_selection_applied = gr.JSON(value=None, visible=False)
         page.chat_selected_file = gr.Markdown(
             "Focus: all files",
             elem_id="chat-selected-file",

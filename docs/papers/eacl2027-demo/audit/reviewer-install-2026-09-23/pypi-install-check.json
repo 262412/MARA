@@ -1,0 +1,36 @@
+{
+  "checked_at_utc": "2026-09-22T16:16:10.111458+00:00",
+  "stages": [
+    {
+      "command": [
+        "uv",
+        "venv",
+        "--seed",
+        "--python",
+        "C:\\Users\\22826\\.codex\\memories\\uv-python\\cpython-3.10.19-windows-x86_64-none\\python.exe",
+        "D:\\MARA-reviewer-test\\20260922T161319Z\\environments\\pypi"
+      ],
+      "exit_code": 0,
+      "log": "logs/pypi-stage-0.log"
+    },
+    {
+      "command": [
+        "D:\\MARA-reviewer-test\\20260922T161319Z\\environments\\pypi\\Scripts\\python.exe",
+        "-m",
+        "pip",
+        "install",
+        "--index-url",
+        "https://pypi.org/simple",
+        "--disable-pip-version-check",
+        "--no-input",
+        "--timeout",
+        "15",
+        "--retries",
+        "1",
+        "mara-research-cli"
+      ],
+      "exit_code": 1,
+      "log": "logs/pypi-stage-1.log"
+    }
+  ]
+}

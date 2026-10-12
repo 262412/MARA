@@ -51,13 +51,20 @@ def test_publish_rejects_leaf_symlink_without_touching_victim(tmp_path):
 
 
 @pytest.mark.parametrize("entry", [Path("../escape.pdf"), Path("/tmp/escape.pdf")])
-def test_publish_rejects_entries_outside_trusted_root(tmp_path, entry):
+def test_publish_rejects_entries_outside_trusted_root(tmp_path, entry, monkeypatch):
     from ktem.preview.errors import PreviewConversionError
 
     publish_validated_pdf = _publisher()
 
     canonical = write_text_pdf(tmp_path / "canonical.pdf", ["canonical"])
     trusted_root = tmp_path / "visible"
+    real_mkdir = Path.mkdir
+
+    def guarded_mkdir(path, *args, **kwargs):
+        assert path.resolve().is_relative_to(tmp_path), "external write attempted"
+        return real_mkdir(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", guarded_mkdir)
 
     with pytest.raises(PreviewConversionError, match="trusted cache root"):
         publish_validated_pdf(canonical, trusted_root, entry)

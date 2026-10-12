@@ -1,6 +1,6 @@
 ---
 name: MARA-review
-description: Use this skill to review slide decks with `MARA review`.
+description: "Review a slide deck through MARA review."
 version: 1.0.0
 ---
 

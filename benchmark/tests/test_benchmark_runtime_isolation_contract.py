@@ -63,6 +63,7 @@ def _fresh_runtime_command(
     export MARA_BENCHMARK_UV={fake_uv}
     export PYTHONPATH={source_roots}
     export SLURM_JOB_ID={job_id}
+    export MARA_QDRANT_NAMESPACE=unrelated_interactive_namespace
     source {RUNTIME_HELPER}
     mara_configure_benchmark_runtime concurrent-suite
     mara_bootstrap_benchmark_runtime
@@ -194,6 +195,24 @@ def test_runtime_contract_rejects_checkout_theflow_and_shared_canonical_venv(tmp
         "checkout" in checkout_result.stderr.lower()
         or ".theflow" in checkout_result.stderr
     )
+
+
+def test_runtime_contract_rejects_root_without_benchmark_prefix(tmp_path):
+    runtime_root = tmp_path / "quality_focus_run"
+    result = _bash(
+        f"""
+        set -u
+        export MARA_PROJECT_ROOT={PROJECT_ROOT}
+        export MARA_BENCHMARK_RUNTIME_ROOT={runtime_root}
+        export SLURM_JOB_ID=907
+        source {RUNTIME_HELPER}
+        mara_configure_benchmark_runtime invalid-root-suite
+        """
+    )
+
+    assert result.returncode != 0
+    assert "benchmark_*" in result.stderr
+    assert not runtime_root.exists()
 
 
 def test_runtime_contract_rejects_shared_storage_and_existing_job_runtime(tmp_path):
@@ -382,6 +401,11 @@ def test_two_fresh_docqa_subprocesses_keep_runtime_and_source_storage_disjoint(
         assert "fresh_docqa=DocQARuntime" in stdout
     contracts = [json.loads(output.read_text(encoding="utf-8")) for output in outputs]
     assert contracts[0]["KH_APP_DATA_DIR"] != contracts[1]["KH_APP_DATA_DIR"]
+    assert contracts[0]["qdrant_namespace"] != contracts[1]["qdrant_namespace"]
+    assert all(
+        contract["qdrant_namespace"] != "unrelated_interactive_namespace"
+        for contract in contracts
+    )
     assert (
         contracts[0]["theflow_storage_prefix"] != contracts[1]["theflow_storage_prefix"]
     )

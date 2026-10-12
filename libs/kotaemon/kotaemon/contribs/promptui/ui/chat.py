@@ -90,7 +90,7 @@ def construct_chat_ui(
         outputs.append(component)
 
     sess = gr.State(value=None)
-    chatbot = gr.Chatbot(label="Chatbot", show_copy_button=True)
+    chatbot = gr.Chatbot(label="Chatbot", buttons=["copy"], allow_tags=False)
     chat = ChatBlock(
         func_chat, chatbot=chatbot, additional_inputs=[sess], additional_outputs=outputs
     )

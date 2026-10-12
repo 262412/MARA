@@ -10,6 +10,7 @@ from theflow.utils.modules import deserialize, import_dotted_string
 if TYPE_CHECKING:
     from kotaemon.llms import ChatLLM
 
+from .config import migrate_legacy_agent_classpath, migrate_legacy_agent_spec
 from .db import LLMTable, engine
 
 
@@ -79,7 +80,7 @@ class LLMManager:
 
         spec = getattr(self, "_runtime_specs", {}).get(key, self._info[key]["spec"])
         try:
-            model = deserialize(spec, safe=False)
+            model = deserialize(migrate_legacy_agent_spec(spec), safe=False)
         except Exception as exc:
             message = str(exc)
             self._info[key]["load_error"] = message
@@ -116,7 +117,11 @@ class LLMManager:
         ]
 
         for extra_vendor in getattr(flowsettings, "KH_LLM_EXTRA_VENDORS", []):
-            self._vendors.append(import_dotted_string(extra_vendor, safe=False))
+            self._vendors.append(
+                import_dotted_string(
+                    migrate_legacy_agent_classpath(extra_vendor), safe=False
+                )
+            )
 
     def __getitem__(self, key: str) -> ChatLLM:
         """Get model by name"""

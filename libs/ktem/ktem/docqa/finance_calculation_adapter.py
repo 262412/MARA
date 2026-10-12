@@ -43,6 +43,8 @@ from .finance_query_planning import FINANCE_METRIC_ALIASES
 from .finance_scale import dimension_binding_scope as _dimension_binding_scope
 from .finance_scale import scale_from_text as _scale
 from .finance_scale import source_scale_evidence as _source_scale_evidence
+from .financial_cell_binding import find_financial_cells
+from .financial_cell_binding import unique_semantic_cell as _unique_semantic_cell
 from .financial_statement_identity import (
     compatible_financial_identity,
     financial_statement_identity,
@@ -297,14 +299,16 @@ def _operand_from_input(
         statement_kind=statement_kind,
         financial_scope=financial_scope,
     )
-    semantic_cell = cell or find_financial_cell(
-        evidence_items,
-        aliases=aliases,
-        period=period,
-        period_kind=period_kind,
-        excluded_cell_ids=excluded_evidence_ids,
-        statement_kind=statement_kind,
-        financial_scope=financial_scope,
+    semantic_cell = cell or _unique_semantic_cell(
+        find_financial_cells(
+            evidence_items,
+            aliases=aliases,
+            period=period,
+            period_kind=period_kind,
+            excluded_cell_ids=excluded_evidence_ids,
+            statement_kind=statement_kind,
+            financial_scope=financial_scope,
+        )
     )
     normalize_magnitude = uses_positive_magnitude(name, question_type)
     if semantic_cell is not None:

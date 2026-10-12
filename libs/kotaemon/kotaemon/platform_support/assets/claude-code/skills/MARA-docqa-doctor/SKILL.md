@@ -1,6 +1,6 @@
 ---
 name: MARA-docqa-doctor
-description: Use when the user wants to validate MARA DocQA runtime readiness through `MARA docqa doctor`.
+description: "Check MARA DocQA runtime readiness."
 version: 1.0.0
 ---
 

@@ -3,10 +3,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${VENV_DIR:-$SCRIPT_DIR/.venv}"
-PYTHON_BIN="${PYTHON_BIN:-3.10}"
+PYTHON_BIN="${PYTHON_BIN:-3.11}"
 SKIP_INIT="${SKIP_INIT:-0}"
 INSTALL_CODEX="${INSTALL_CODEX:-0}"
 INSTALL_CLAUDE_CODE="${INSTALL_CLAUDE_CODE:-0}"
+INSTALL_DEV="${INSTALL_DEV:-0}"
 
 if [[ ! -f "$SCRIPT_DIR/pyproject.toml" || ! -f "$SCRIPT_DIR/uv.lock" ]]; then
   echo "install.sh supports a verified MARA source checkout with uv.lock." >&2
@@ -14,7 +15,7 @@ if [[ ! -f "$SCRIPT_DIR/pyproject.toml" || ! -f "$SCRIPT_DIR/uv.lock" ]]; then
 fi
 COMMON_GIT_DIR="$(git -C "$SCRIPT_DIR" rev-parse --git-common-dir 2>/dev/null || true)"
 if [[ -n "$COMMON_GIT_DIR" ]]; then
-  if [[ "$COMMON_GIT_DIR" != /* ]]; then
+  if [[ "$COMMON_GIT_DIR" != /* && ! "$COMMON_GIT_DIR" =~ ^[A-Za-z]:[/\\] ]]; then
     COMMON_GIT_DIR="$SCRIPT_DIR/$COMMON_GIT_DIR"
   fi
   PRIMARY_ROOT="$(cd -- "$COMMON_GIT_DIR/.." && pwd -P)"
@@ -35,10 +36,14 @@ if ! uv python find "$PYTHON_BIN" >/dev/null 2>&1; then
 fi
 
 export UV_PROJECT_ENVIRONMENT="$VENV_DIR"
+DEVELOPMENT_FLAGS=(--no-dev)
+if [[ "$INSTALL_DEV" == "1" ]]; then
+  DEVELOPMENT_FLAGS=()
+fi
 uv sync \
   --project "$SCRIPT_DIR" \
   --frozen \
-  --no-dev \
+  "${DEVELOPMENT_FLAGS[@]}" \
   --no-editable \
   --reinstall-package mara-app \
   --reinstall-package mara-research-cli \
@@ -48,6 +53,9 @@ uv sync \
   --python "$PYTHON_BIN"
 
 VENV_MARA="$VENV_DIR/bin/MARA"
+if [[ -f "$VENV_DIR/Scripts/MARA.exe" ]]; then
+  VENV_MARA="$VENV_DIR/Scripts/MARA.exe"
+fi
 if [[ ! -x "$VENV_MARA" ]]; then
   echo "The frozen sync did not create $VENV_MARA." >&2
   exit 70

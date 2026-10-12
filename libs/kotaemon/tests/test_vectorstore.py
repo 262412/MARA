@@ -1,12 +1,14 @@
 import importlib.util
 import json
 import os
+import shutil
+import subprocess
+import sys
 
 import pytest
 
 from kotaemon.base import DocumentWithEmbedding
 from kotaemon.storages import (
-    ChromaVectorStore,
     InMemoryVectorStore,
     MilvusVectorStore,
     QdrantVectorStore,
@@ -20,9 +22,9 @@ _HAS_MILVUS_LOCAL_BACKEND = (
 
 
 class TestChromaVectorStore:
-    def test_add(self, tmp_path):
+    def test_add(self, tmp_path, chroma_store_factory):
         """Test that the DB add correctly"""
-        db = ChromaVectorStore(path=str(tmp_path))
+        db = chroma_store_factory(path=tmp_path)
 
         embeddings = [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
         metadatas = [{"a": 1, "b": 2}, {"a": 3, "b": 4}]
@@ -33,8 +35,8 @@ class TestChromaVectorStore:
         assert output == ids, "Expected output to be the same as ids"
         assert db._collection.count() == 2, "Expected 2 added entries"
 
-    def test_add_from_docs(self, tmp_path):
-        db = ChromaVectorStore(path=str(tmp_path))
+    def test_add_from_docs(self, tmp_path, chroma_store_factory):
+        db = chroma_store_factory(path=tmp_path)
 
         embeddings = [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
         metadatas = [{"a": 1, "b": 2}, {"a": 3, "b": 4}]
@@ -47,8 +49,8 @@ class TestChromaVectorStore:
         assert len(output) == 2, "Expected outputting 2 ids"
         assert db._collection.count() == 2, "Expected 2 added entries"
 
-    def test_delete(self, tmp_path):
-        db = ChromaVectorStore(path=str(tmp_path))
+    def test_delete(self, tmp_path, chroma_store_factory):
+        db = chroma_store_factory(path=tmp_path)
 
         embeddings = [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6], [0.7, 0.8, 0.9]]
         metadatas = [{"a": 1, "b": 2}, {"a": 3, "b": 4}, {"a": 5, "b": 6}]
@@ -61,8 +63,8 @@ class TestChromaVectorStore:
         db.delete(ids=["c"])
         assert db._collection.count() == 0, "Expected 0 remaining entry"
 
-    def test_query(self, tmp_path):
-        db = ChromaVectorStore(path=str(tmp_path))
+    def test_query(self, tmp_path, chroma_store_factory):
+        db = chroma_store_factory(path=tmp_path)
 
         embeddings = [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6], [0.7, 0.8, 0.9]]
         metadatas = [{"a": 1, "b": 2}, {"a": 3, "b": 4}, {"a": 5, "b": 6}]
@@ -77,15 +79,15 @@ class TestChromaVectorStore:
         _, _, out_ids = db.query(embedding=[0.42, 0.52, 0.53], top_k=1)
         assert out_ids == ["b"]
 
-    def test_save_load_delete(self, tmp_path):
+    def test_save_load_delete(self, tmp_path, chroma_store_factory):
         """Test that save/load func behave correctly."""
         embeddings = [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6], [0.7, 0.8, 0.9]]
         metadatas = [{"a": 1, "b": 2}, {"a": 3, "b": 4}, {"a": 5, "b": 6}]
         ids = ["1", "2", "3"]
-        db = ChromaVectorStore(path=str(tmp_path))
+        db = chroma_store_factory(path=tmp_path)
         db.add(embeddings=embeddings, metadatas=metadatas, ids=ids)
 
-        db2 = ChromaVectorStore(path=str(tmp_path))
+        db2 = chroma_store_factory(path=tmp_path)
         assert (
             db2._collection.count() == 3
         ), "load function does not load data completely"
@@ -93,7 +95,7 @@ class TestChromaVectorStore:
         # test delete collection function
         db2.drop()
         # reinit the chroma with the same collection name
-        db2 = ChromaVectorStore(path=str(tmp_path))
+        db2 = chroma_store_factory(path=tmp_path)
         assert (
             db2._collection.count() == 0
         ), "delete collection function does not work correctly"
@@ -191,6 +193,41 @@ def test_milvus_local_backend_dependency_error_is_clear(monkeypatch, tmp_path):
     reason="Milvus local backend requires llama-index Milvus support and milvus_lite.",
 )
 class TestMilvusVectorStore:
+    @pytest.fixture(autouse=True)
+    def release_local_server(self, tmp_path):
+        from milvus_lite.server_manager import server_manager_instance
+
+        yield
+        server_manager_instance.release_server(str(tmp_path / "milvus.db"))
+
+    def test_persists_across_processes_and_releases_storage(self, tmp_path):
+        script = """
+import sys
+from kotaemon.storages import MilvusVectorStore
+
+db = MilvusVectorStore(path=sys.argv[1], overwrite=False)
+if sys.argv[2] == 'write':
+    db.add(embeddings=[[0.1, 0.2, 0.3]], metadatas=[{'source': 'persisted'}], ids=['saved'])
+_, _, ids = db.query(embedding=[0.1, 0.2, 0.3], top_k=1)
+assert ids == ['saved'], ids
+assert db.count() == 1
+db._client.client.close()
+"""
+        for operation in ("write", "read"):
+            result = subprocess.run(
+                [sys.executable, "-c", script, str(tmp_path), operation],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                env={**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)},
+            )
+            assert result.returncode == 0, result.stdout + result.stderr
+
+        database = tmp_path / "milvus.db"
+        assert database.is_dir()
+        shutil.rmtree(database)
+        assert not database.exists()
+
     def test_add(self, tmp_path):
         """Test that the DB add correctly"""
         db = MilvusVectorStore(

@@ -1,46 +1,25 @@
 # ktem
 
-`ktem` is the application/runtime layer for the MARA product.
+`ktem` is MARA's application layer: Web UI, shared DocQA services, runtime
+configuration, indexing, sessions, previews, and study artifacts. It composes
+`kotaemon` services; `mara-research-cli` exposes the public commands.
 
-It contains the shared Web UI runtime, DocQA runtime, settings bootstrap, packaged
-launch helpers, database models, indexing orchestration, page preview services,
-and other app-facing components that sit on top of the lower-level `kotaemon`
-library.
+## Install and run
 
-## Relationship to the other packages
+Use the [repository installation guide](../../README.md#install-web-and-cli)
+([中文](../../README.zh-CN.md#安装-web-与-cli)) to prepare Python 3.11, the locked
+non-editable packages, Qdrant, and model configuration.
 
-- `kotaemon`: internal core building blocks for LLMs, embeddings, retrieval, indexing, and platform assets.
-- `ktem`: application runtime and UI/service layer that assembles those building blocks into the MARA app.
-- `mara-research-cli`: internal implementation package that exposes the `MARA` command.
-
-## Install
-
-For end users, prefer the public CLI package:
-
-```bash
-pip install mara-research-cli
-```
-
-For local development from source:
-
-```bash
-pip install -e "libs/kotaemon[all]"
-pip install -e "libs/ktem"
-```
-
-## Packaged runtime entrypoints
-
-After installing `mara-research-cli`, the shared CLI is available:
-
-```bash
+```shell
 MARA app init
 MARA app doctor
 MARA app run
 MARA docqa doctor
 ```
 
-## Source repository
+Set the same `MARA_APP_HOME` to share a profile with the CLI and Desktop.
+See [configuration and data](../../README.md#configuration-and-data) for path
+precedence, existing model records, and backup guidance.
 
-Project homepage and source:
-
-- https://github.com/Cinnamon/kotaemon
+Development setup and verification are in
+[Contributing](../../docs/development/contributing.md).

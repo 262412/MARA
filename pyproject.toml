@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools==80.9.0", "wheel==0.45.1", "setuptools-git-versioning==2.1.0"]
+requires = ["setuptools==83.0.0", "wheel==0.46.2", "setuptools-git-versioning==2.1.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -15,7 +15,7 @@ tag_filter = "v?\\d+(\\.\\d+)*.*"
 [project]
 name = "mara-app"
 dynamic = ["version"]
-requires-python = ">= 3.10"
+requires-python = ">=3.11,<3.13"
 description = "MARA local-first multimodal document QA workbench."
 readme = "README.md"
 license = "Apache-2.0"
@@ -39,24 +39,37 @@ mara = ["mara-research-cli"]
 kotaemon = { workspace = true }
 ktem = { workspace = true }
 "mara-research-cli" = { workspace = true }
+nltk = { path = "vendor/nltk" }
 [tool.uv]
 required-version = "==0.11.19"
 build-constraint-dependencies = [
-    "setuptools==80.9.0",
+    "setuptools==83.0.0",
     "setuptools-git-versioning==2.1.0",
-    "wheel==0.45.1",
+    "wheel==0.46.2",
 ]
 constraint-dependencies = [
+    "anyio==4.14.2",
     "aiohttp>=3.14.3",
     "cryptography>=50.0.0",
+    "filelock==3.32.7",
+    "fsspec==2026.6.0",
     "h2>=4.4.1",
-    "mcp==1.12.4",
+    "httpx2>=2.12.0",
+    "mcp==1.28.1",
+    "oauthlib==4.0.0",
     "onnx>=1.22.0,<1.23; python_version < '3.13'",
-    "pyarrow==21.0.0",
-    "pydantic-settings==2.13.1",
+    "pyarrow==23.0.1",
+    "pydantic-settings==2.14.2",
     "pywin32==311; sys_platform == 'win32'",
     "rich==14.1.0",
+    "sentence-transformers==6.0.0",
+    "setuptools==83.0.0",
+    "soupsieve==2.9",
+    "torch==2.13.0",
+    "transformers==5.18.0",
     "typer==0.19.2",
+    "urllib3==2.8.0",
+    "virtualenv==21.7.13",
 ]
 
 # uv workspace configuration
@@ -85,10 +98,10 @@ dev = [
     "twine",
     "types-cachetools==7.0.0.20260518",
     "types-Markdown==3.10.2.20260518",
-    "types-PyYAML==6.0.12.11",
+    "types-PyYAML==6.0.12.20260906",
     "types-requests==2.32.4.20250913",
     "types-tzlocal==5.1.0.1",
-    "tomli==2.2.1; python_version < '3.11'",
+    "tomli==2.2.1",
 ]
 
 [project.urls]

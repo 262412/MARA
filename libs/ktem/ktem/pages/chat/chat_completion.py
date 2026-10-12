@@ -1,0 +1,152 @@
+"""Adapt the completed runtime turn to the Web naming and persistence tail."""
+
+from copy import deepcopy
+from dataclasses import dataclass
+from functools import wraps
+from inspect import signature
+from typing import Callable
+
+import gradio as gr
+
+from .generation_store import (
+    get_current_view,
+    get_snapshot_by_page,
+    get_view_revision,
+    make_page_key,
+)
+
+
+def with_completion_context(callback):
+    """Keep the old stream callback intact and capture its actual input scope."""
+
+    @wraps(callback)
+    def stream(*args, **kwargs):
+        inputs = signature(callback).bind(*args, **kwargs).arguments
+        session_key = getattr(inputs.get("request"), "session_hash", None) or "default"
+        context = {
+            "conversation_id": inputs["conversation_id"],
+            "selecteds": deepcopy(inputs.get("selecteds", ())),
+            "view_revision": get_view_revision(
+                getattr(inputs.get("request"), "session_hash", None)
+            ),
+            "page_key": make_page_key(
+                inputs.get("active_file_id"), inputs.get("page_number")
+            ),
+            "generation_key": None,
+        }
+        for index, output in enumerate(callback(*args, **kwargs)):
+            if index == 0:
+                snapshot = get_snapshot_by_page(session_key, context["page_key"])
+                context["generation_key"] = (snapshot or {}).get("request_key")
+            yield (
+                *output,
+                {
+                    **context,
+                    "messages": deepcopy(output[13]),
+                    "page_messages": deepcopy(output[0])
+                    if isinstance(output[0], (list, tuple))
+                    else None,
+                },
+            )
+
+    return stream
+
+
+@dataclass
+class CompletionTail:
+    resolve_user: Callable
+    load_session: Callable
+    suggest_name: Callable
+    rename_conversation: Callable
+    persist_data_source: Callable
+    demo_mode: bool = False
+
+    def _completed(self, conversation_id, user_id, messages, context, request):
+        if not context or context["conversation_id"] != conversation_id:
+            return None
+        if context["view_revision"] != get_view_revision(
+            getattr(request, "session_hash", None)
+        ):
+            return None
+        if not messages or context["messages"] != messages:
+            return None
+        user_id = self.resolve_user(user_id, request)
+        session = self.load_session(conversation_id, user_id=user_id)
+        # The finalizer is the authority for a successful turn. Error placeholders,
+        # partial streams and a different/newer turn must never reach Web writes.
+        if session is None or session.messages != [tuple(pair) for pair in messages]:
+            return None
+        session_key = getattr(request, "session_hash", None) or "default"
+        snapshot = get_snapshot_by_page(session_key, context["page_key"])
+        if (
+            not snapshot
+            or snapshot["request_key"] != context["generation_key"]
+            or not snapshot["done"]
+            or snapshot["error"]
+            or get_current_view(session_key) != context["page_key"]
+        ):
+            return None
+        return session
+
+    def suggest(self, conversation_id, user_id, messages, context, request: gr.Request):
+        if (
+            self.demo_mode
+            or self._completed(conversation_id, user_id, messages, context, request)
+            is not None
+        ):
+            return self.suggest_name(messages)
+        return gr.skip(), False
+
+    def rename(
+        self,
+        conversation_id,
+        new_name,
+        is_renamed,
+        user_id,
+        messages,
+        context,
+        request: gr.Request,
+    ):
+        if (
+            self.demo_mode
+            or self._completed(conversation_id, user_id, messages, context, request)
+            is not None
+        ):
+            return self.rename_conversation(
+                conversation_id, new_name, is_renamed, user_id, request
+            )
+        return gr.skip(), gr.skip(), gr.skip()
+
+    def persist(
+        self,
+        conversation_id,
+        user_id,
+        retrieval_msg,
+        plot_data,
+        retrieval_history,
+        plot_history,
+        messages,
+        state,
+        graph_source_ids,
+        context,
+        request: gr.Request,
+        *selecteds,
+    ):
+        session = self._completed(conversation_id, user_id, messages, context, request)
+        if session is None:
+            return gr.skip(), gr.skip()
+        # Reconcile through the existing Web writer using the finalizer's payload,
+        # not UI fragments (mindmap HTML, stale state or a changed file selector).
+        return self.persist_data_source(
+            conversation_id,
+            user_id,
+            session.retrieval_messages[-1],
+            session.plot_history[-1],
+            session.retrieval_messages[:-1],
+            session.plot_history[:-1],
+            session.messages,
+            session.state,
+            session.graph_source_ids,
+            request,
+            *context["selecteds"],
+        )

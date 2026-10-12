@@ -1,0 +1,7 @@
+{
+  "stopped_at_utc": "2026-09-22T16:33:53.4778535Z",
+  "pid": 46224,
+  "stage": 1,
+  "reason": "Ended the supplemental launcher-dependency probe after the public README installation had already failed; retry progressed past build dependencies but experienced repeated metadata download interruptions. This stop is not a MARA package-failure result.",
+  "process_start_time": "2026-09-22T16:27:54.9370650Z"
+}

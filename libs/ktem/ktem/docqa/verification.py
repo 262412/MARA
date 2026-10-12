@@ -12,6 +12,7 @@ from .claim_support import claim_supported
 from .domain_verifiers import normalize_verification_domain
 from .evidence import EvidenceBundle
 from .evidence_identity import identity_of
+from .evidence_text import extract_final_answer_text
 from .query_plan_schema import QueryPlan, slot_binding_state
 from .query_planning import request_planning_question
 from .semantic_evidence_set_authority import PropositionVerifier
@@ -65,6 +66,7 @@ def verify_decision(
     *,
     proposition_verifier: PropositionVerifier | None = None,
 ) -> VerifyDecision:
+    answer = extract_final_answer_text(answer)
     mode = normalize_verification_mode(getattr(request, "verification_mode", None))
     preflight = _verification_preflight(
         request,
@@ -326,6 +328,7 @@ def with_verification_evidence(
         if identity not in seen:
             seen.add(identity)
             verified.append(item)
+    verified.sort(key=lambda item: identity_of(item).key)
     metadata = dict(bundle.metadata)
     metadata["verified_evidence"] = verified
     metadata["verified_claim_support_evidence"] = list(verified)

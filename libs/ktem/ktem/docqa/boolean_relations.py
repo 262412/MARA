@@ -21,6 +21,18 @@ _RELATION_GROUPS = {
     },
     "associate": {"associate", "connect", "link", "relate"},
     "compare": {"compare", "contrast", "outperform"},
+    "rank": {
+        "best",
+        "place",
+        "placed",
+        "position",
+        "positions",
+        "rank",
+        "ranked",
+        "ranking",
+        "winner",
+        "winning",
+    },
     "contain": {
         "combine",
         "comprise",
@@ -147,6 +159,23 @@ _QUESTION_RELATION_ALIASES = {
     "represent": "learn",
 }
 
+_BEST_PERFORMANCE_QUESTION_RE = re.compile(
+    r"^\s*(?:does|did|is|was)\s+(?:the\s+)?(?P<subject>.+?)\s+"
+    r"(?:reach|achieve|attain|have|get)\w*\s+(?:the\s+)?"
+    r"best\s+performance\b",
+    re.IGNORECASE,
+)
+_NON_WINNING_RANKING_RE = re.compile(
+    r"\b(?:behind|below)\b[^.!?]{0,100}\b(?:winner|winning|best)\b|"
+    r"\b(?:second\s+(?:position|place)|rank(?:ed|s)?\s+second)\b|"
+    r"\b(?:not|isn't|is\s+not)\s+(?:the\s+)?(?:best|top|winner)\b|"
+    r"\b(?:did|does|has|have|had)\s+not\s+"
+    r"(?:reach|achieve|attain)\b[^.!?]{0,80}\b(?:best|winner|top)\b|"
+    r"\b(?:has|have|had|does|did|do)\s+not\s+improv(?:e|es|ed|ing)\b"
+    r"[^.!?]{0,120}\b(?:winner|winning|best|scores?|performance)\b",
+    re.IGNORECASE,
+)
+
 
 def boolean_relation_lemmas(value: str) -> set[str]:
     relations = {
@@ -178,6 +207,8 @@ def _question_relation(value: str) -> str:
     )
     if auxiliary is None:
         return ""
+    if best_performance_question_subject(value):
+        return "rank"
     tokens = re.findall(r"[a-z]+(?:-[a-z]+)?", text[auxiliary.end() :])
     if text.startswith(("is ", "are ", "was ", "were ")):
         if re.search(r"\bcompatible\b", text):
@@ -198,9 +229,36 @@ def _question_relation(value: str) -> str:
     return ""
 
 
+def best_performance_question_subject(value: str) -> str:
+    """Return the named system in a closed best-performance question."""
+
+    match = _BEST_PERFORMANCE_QUESTION_RE.search(str(value or ""))
+    if match is None:
+        return ""
+    return " ".join(match.group("subject").split())
+
+
+def explicit_non_winning_ranking_evidence(question: str, text: str) -> bool:
+    """Recognize a local ranking result that contradicts being the best."""
+
+    subject = best_performance_question_subject(question)
+    if not subject:
+        return False
+    anchor = subject.split()[0].strip(".,;:!?()[]{}\"'")
+    if not anchor or not re.search(
+        rf"\b{re.escape(anchor)}(?:[- ]based)?\b",
+        str(text or ""),
+        re.IGNORECASE,
+    ):
+        return False
+    return bool(_NON_WINNING_RANKING_RE.search(str(text or "")))
+
+
 def boolean_relations_align(question: str, evidence: str) -> bool:
     primary = primary_boolean_relation(question)
     if not primary:
+        return True
+    if primary == "rank" and explicit_non_winning_ranking_evidence(question, evidence):
         return True
     evidence_relations = boolean_relation_lemmas(evidence)
     if primary in evidence_relations:

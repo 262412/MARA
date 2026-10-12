@@ -302,6 +302,11 @@ def free_text_claim_result(
     atom: dict[str, Any],
     slot_ids: list[str],
 ) -> dict[str, Any]:
+    authority_status = str(atom.get("authority_status") or "").strip() or (
+        "semantic"
+        if str(atom.get("reason") or "") == "layered_semantic_answer_relation"
+        else "exact"
+    )
     return {
         **result,
         "claim_id": str(result.get("claim_id") or claim_id),
@@ -309,7 +314,7 @@ def free_text_claim_result(
         "status": "supported",
         "supporting_evidence_ids": [atom["evidence_id"]],
         "contradicting_evidence_ids": [],
-        "authority_status": "exact",
+        "authority_status": authority_status,
         "authoritative_evidence_id": atom["evidence_id"],
         "authoritative_evidence_ref": atom["evidence_ref"],
         "authoritative_span_id": atom["span_id"],

@@ -12,6 +12,7 @@ from .qasper_boolean_no_evidence import qasper_no_evidence_set_analysis
 from .question_proposition import QuestionProposition
 
 _COMPARISON_RELATIONS = {
+    "explicit_ranking_contradiction": "ranking_comparison",
     "partial_scope_only": "partial_scope",
     "role_incompatibility": "role_incompatibility",
 }

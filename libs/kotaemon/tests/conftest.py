@@ -1,6 +1,36 @@
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+import pytest_runtime_plugin as _runtime_isolation  # noqa: E402
+
+pytest_configure = _runtime_isolation.register_plugin
+
+
+@pytest.fixture
+def chroma_store_factory(tmp_path):
+    pytest.importorskip(
+        "chromadb", reason="Legacy Chroma is tested in the migration environment"
+    )
+    pytest.importorskip("llama_index.vector_stores.chroma")
+    from .chroma_test_runtime import owned_chroma_stores
+
+    with owned_chroma_stores(tmp_path) as create:
+        yield create
+
+
+@pytest.fixture
+def qdrant_store_factory(tmp_path):
+    from .qdrant_test_runtime import owned_qdrant_stores
+
+    with owned_qdrant_stores(tmp_path, cleanup=True) as create:
+        yield create
 
 
 @pytest.fixture(scope="function")

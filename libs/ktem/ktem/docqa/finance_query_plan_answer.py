@@ -148,6 +148,7 @@ def _resolved_operands(
 ) -> list[tuple[dict[str, Any], Decimal]] | None:
     lookup = calculation_evidence_lookup(evidence_items)
     bound: list[tuple[dict[str, Any], Decimal]] = []
+    used_identities: set[str] = set()
     for slot in slots:
         cardinality = max(1, int(slot.get("cardinality") or 1))
         items: dict[str, dict[str, Any]] = {}
@@ -157,7 +158,12 @@ def _resolved_operands(
                 items.setdefault(identity_of(item).key, item)
         if len(items) < cardinality:
             return None
-        for item in list(items.values())[:cardinality]:
+        selected_items = list(items.items())[:cardinality]
+        selected_identities = {identity for identity, _item in selected_items}
+        if used_identities.intersection(selected_identities):
+            return None
+        used_identities.update(selected_identities)
+        for _identity, item in selected_items:
             if not executable_operand_evidence(item):
                 return None
             value = _structured_decimal(item.get("value"))

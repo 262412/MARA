@@ -1,6 +1,6 @@
 ---
 name: MARA-read-slide
-description: Use this skill to read slide content and metadata with `MARA read-slide`.
+description: "Read slide content and metadata through MARA."
 version: 1.0.0
 ---
 

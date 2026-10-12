@@ -106,7 +106,8 @@ class DummyNotebookService:
             }
         }
 
-    def get_notebook(self, conversation_id: str) -> dict[str, Any]:
+    def get_notebook(self, conversation_id: str, *, user_id: str) -> dict[str, Any]:
+        assert user_id == "default"
         return self.notebooks[conversation_id]
 
     def list_artifacts(self, data_source: dict[str, Any]) -> list[dict[str, Any]]:
@@ -127,6 +128,7 @@ class DummyNotebookService:
         conversation_id: str,
         **kwargs: Any,
     ) -> dict[str, Any]:
+        assert kwargs["user_id"] == "default"
         note = {
             "note_id": kwargs.get("note_id") or "note-1",
             "title": kwargs["title"],
@@ -145,6 +147,7 @@ class DummyNotebookService:
         conversation_id: str,
         **kwargs: Any,
     ) -> dict[str, Any]:
+        assert kwargs["user_id"] == "default"
         note = {
             "note_id": kwargs.get("note_id") or "answer-1",
             "title": kwargs["title"],
@@ -162,7 +165,10 @@ class DummyNotebookService:
         self,
         conversation_id: str,
         source_ids: list[str],
+        *,
+        user_id: str,
     ) -> list[str]:
+        assert user_id == "default"
         selected = list(source_ids)
         self.notebooks[conversation_id]["selected_source_ids"] = selected
         return selected
@@ -186,7 +192,9 @@ class DummyNotebookService:
         *,
         source_ids: list[str],
         source_path: str,
+        user_id: str,
     ) -> dict[str, Any]:
+        assert user_id == "default"
         notebook = self.notebooks[conversation_id]
         selected_source_ids = cast(list[str], notebook["selected_source_ids"])
         notebook["selected_source_ids"] = [
@@ -222,6 +230,7 @@ class DummyNotebookService:
         payload: Any,
         **kwargs: Any,
     ) -> dict[str, Any]:
+        assert kwargs["user_id"] == "default"
         artifact = {
             "artifact_id": kwargs.get("artifact_id")
             or f"artifact-{len(self.notebooks[conversation_id]['artifacts']) + 1}",

@@ -19,6 +19,8 @@ from llama_index.core.readers.base import BaseReader
 
 from kotaemon.base import Document
 
+from .utils.unstructured_nlp import require_local_spacy_model
+
 
 class UnstructuredReader(BaseReader):
     """General unstructured text reader for a variety of files."""
@@ -72,22 +74,10 @@ class UnstructuredReader(BaseReader):
             """Parse file locally"""
             from unstructured.partition.auto import partition
 
-            partition_kwargs = dict(kwargs)
-            content_type = partition_kwargs.get(
-                "content_type"
-            ) or self._infer_content_type(file_path_str, extra_info)
-            if content_type:
-                partition_kwargs["content_type"] = content_type
-
-            metadata_filename = (
-                partition_kwargs.get("metadata_filename")
-                or partition_kwargs.get("file_filename")
-                or self._infer_file_name(file_path_str, extra_info, content_type)
+            require_local_spacy_model()
+            partition_kwargs = self._local_partition_kwargs(
+                file_path_str, extra_info, kwargs
             )
-            partition_kwargs.pop("file_filename", None)
-            if metadata_filename:
-                partition_kwargs["metadata_filename"] = metadata_filename
-
             try:
                 elements = partition(filename=file_path_str, **partition_kwargs)
             except Exception:
@@ -95,7 +85,7 @@ class UnstructuredReader(BaseReader):
                     file_path=file,
                     extra_info=extra_info,
                     split_documents=split_documents,
-                    content_type=content_type,
+                    content_type=partition_kwargs.get("content_type"),
                 )
 
         """ Process elements """
@@ -136,6 +126,23 @@ class UnstructuredReader(BaseReader):
             docs.append(Document(text="\n\n".join(text_chunks), metadata=metadata))
 
         return docs
+
+    def _local_partition_kwargs(self, file_path, extra_info, kwargs):
+        partition_kwargs = dict(kwargs)
+        content_type = partition_kwargs.get("content_type") or self._infer_content_type(
+            file_path, extra_info
+        )
+        if content_type:
+            partition_kwargs["content_type"] = content_type
+        metadata_filename = (
+            partition_kwargs.get("metadata_filename")
+            or partition_kwargs.get("file_filename")
+            or self._infer_file_name(file_path, extra_info, content_type)
+        )
+        partition_kwargs.pop("file_filename", None)
+        if metadata_filename:
+            partition_kwargs["metadata_filename"] = metadata_filename
+        return partition_kwargs
 
     def _fallback_load_data(
         self,

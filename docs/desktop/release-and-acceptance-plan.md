@@ -1,5 +1,15 @@
 # MARA Desktop 发布与验收计划
 
+## 验收范围
+
+本计划定义每个发行包需要满足的条件。当前功能范围见
+[功能矩阵](feature-parity-matrix.md)，源码运行和构建命令见
+[Desktop README](../../apps/desktop/README.md)。
+
+CI 和发布说明应注明输入 commit、平台及实际产物。源码测试、PyInstaller/Electron
+组合目录 smoke、安装器、干净系统和签名分别验收；旧包通过的检查不能直接用于新包。
+Windows 10/11 与 Ubuntu 22.04/24.04 是目标平台，macOS 不在当前发行范围。
+
 ## 1. 产物
 
 | 平台                   | 主要产物                  | 辅助产物                        |

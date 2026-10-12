@@ -3,10 +3,12 @@ from __future__ import annotations
 import time
 from time import monotonic
 
+import pytest
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.execution import ABSTAIN_MESSAGE, execute_controller_turn
 from ktem.docqa.route_budget import optional_stage_allowed, route_budget_metadata
 from ktem.docqa.terminal_semantic_commit import terminal_commit_projection_present
+from ktem_tests.route_deadline_test_helpers import install_pending_route_worker
 
 
 def _request(timeout_seconds: float) -> DocQARequest:
@@ -27,10 +29,11 @@ def _request(timeout_seconds: float) -> DocQARequest:
     return request
 
 
-def test_blocking_retrieval_commits_typed_deadline_abstention_before_outer_timeout() -> (
-    None
-):
-    started = monotonic()
+def test_blocking_retrieval_commits_typed_deadline_abstention_before_outer_timeout(
+    monkeypatch,
+) -> (None):
+    clock = install_pending_route_worker(monkeypatch)
+    started = clock()
 
     def slow_retrieve(*_args):
         time.sleep(0.3)
@@ -44,13 +47,17 @@ def test_blocking_retrieval_commits_typed_deadline_abstention_before_outer_timeo
             ]
         }
 
+    request = _request(0.1)
+    request.route_deadline_monotonic = clock() + 0.1
     result = execute_controller_turn(
-        _request(0.1),
+        request,
         retrieve=slow_retrieve,
         generate=lambda *_args: "late answer",
     )
 
-    assert monotonic() - started < 0.2
+    assert clock() - started < 0.2
+    assert clock.workers_started == 1
+    assert clock.waits == pytest.approx([0.08, 0.1])
     assert result.answer == ABSTAIN_MESSAGE
     assert result.engine_terminal_answer == "unanswerable"
     assert result.engine_terminal_commit["semantic_answer"] == "unanswerable"

@@ -1,6 +1,6 @@
 ---
 name: MARA-chat
-description: Use this skill to start interactive top-level MARA chat with `MARA chat`.
+description: "Start an interactive MARA slide-agent conversation."
 version: 1.0.0
 ---
 

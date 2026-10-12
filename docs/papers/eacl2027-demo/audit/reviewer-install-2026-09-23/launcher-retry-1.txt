@@ -1,0 +1,59 @@
+Obtaining file:///D:/MARA-reviewer-test/20260922T161319Z/source-download/MARA-0.0.40/libs/kotaemon
+  Installing build dependencies: started
+  Installing build dependencies: still running...
+  Installing build dependencies: still running...
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Collecting azure-ai-documentintelligence (from kotaemon==0.0.1)
+  Downloading azure_ai_documentintelligence-1.0.2-py3-none-any.whl.metadata (53 kB)
+Collecting beautifulsoup4<4.13,>=4.12.3 (from kotaemon==0.0.1)
+  Downloading beautifulsoup4-4.12.3-py3-none-any.whl.metadata (3.8 kB)
+Collecting click<9,>=8.1.7 (from kotaemon==0.0.1)
+  Downloading click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+Collecting cohere<6,>=5.3.2 (from kotaemon==0.0.1)
+  Downloading cohere-5.21.1-py3-none-any.whl.metadata (3.6 kB)
+Collecting cookiecutter<2.7,>=2.6.0 (from kotaemon==0.0.1)
+  Downloading cookiecutter-2.6.0-py3-none-any.whl.metadata (7.3 kB)
+Collecting fast_langdetect (from kotaemon==0.0.1)
+  Downloading fast_langdetect-1.0.1-py3-none-any.whl.metadata (11 kB)
+Collecting fastapi<=0.112.1 (from kotaemon==0.0.1)
+  Downloading fastapi-0.112.1-py3-none-any.whl.metadata (27 kB)
+  WARNING: Connection interrupted while downloading.
+  WARNING: Attempting to resume incomplete download (0 bytes/27 kB, attempt 1)
+  Downloading fastapi-0.112.1-py3-none-any.whl.metadata (27 kB)
+Collecting gradio<5,>=4.31.0 (from kotaemon==0.0.1)
+  Downloading gradio-4.44.1-py3-none-any.whl.metadata (15 kB)
+Collecting html2text==2024.2.26 (from kotaemon==0.0.1)
+  Downloading html2text-2024.2.26.tar.gz (56 kB)
+  WARNING: Connection interrupted while downloading.
+  WARNING: Attempting to resume incomplete download (0 bytes/56 kB, attempt 1)
+  Downloading html2text-2024.2.26.tar.gz (56 kB)
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Collecting langchain<2 (from kotaemon==0.0.1)
+  Downloading langchain-1.4.2-py3-none-any.whl.metadata (6.2 kB)
+Collecting langchain-community<1 (from kotaemon==0.0.1)
+  Downloading langchain_community-0.4.2-py3-none-any.whl.metadata (3.4 kB)
+Collecting langchain-openai<2 (from kotaemon==0.0.1)
+  Downloading langchain_openai-1.6.3-py3-none-any.whl.metadata (3.4 kB)
+Collecting langchain-google-genai<5 (from kotaemon==0.0.1)
+  Downloading langchain_google_genai-4.4.0-py3-none-any.whl.metadata (2.7 kB)
+Collecting langchain-anthropic<2 (from kotaemon==0.0.1)
+  Downloading langchain_anthropic-1.7.2-py3-none-any.whl.metadata (3.5 kB)
+Collecting langchain-ollama<2 (from kotaemon==0.0.1)
+  Downloading langchain_ollama-1.1.0-py3-none-any.whl.metadata (3.0 kB)
+Collecting langchain-mistralai<2 (from kotaemon==0.0.1)
+  Downloading langchain_mistralai-1.1.6-py3-none-any.whl.metadata (3.4 kB)
+Collecting langchain-cohere<1 (from kotaemon==0.0.1)
+  Downloading langchain_cohere-0.6.0-py3-none-any.whl.metadata (8.3 kB)
+Collecting llama-hub<0.1.0,>=0.0.79 (from kotaemon==0.0.1)
+  Downloading llama_hub-0.0.79.post1-py3-none-any.whl.metadata (16 kB)

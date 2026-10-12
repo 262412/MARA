@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import faulthandler
 import gc
 import tempfile
 import unittest
@@ -74,6 +75,10 @@ def assert_gate2_indexing_blocked(test: unittest.TestCase, doctor: dict) -> None
 
 
 class Gate2SmokeFixtureTest(unittest.TestCase):
+    def setUp(self) -> None:
+        faulthandler.dump_traceback_later(120, exit=True)
+        self.addCleanup(faulthandler.cancel_dump_traceback_later)
+
     def test_seeds_one_file_and_one_session_for_the_real_application_service(
         self,
     ) -> None:
@@ -145,11 +150,10 @@ class Gate2SmokeFixtureTest(unittest.TestCase):
                 )
             finally:
                 service = None
-                from chromadb.api.client import SharedSystemClient
+                from ktem.components import get_docstore, get_vectorstore
 
-                for system in tuple(SharedSystemClient._identifier_to_system.values()):
-                    system.stop()
-                SharedSystemClient.clear_system_cache()
+                get_vectorstore.cache_clear()
+                get_docstore.cache_clear()
                 engine.dispose()
                 gc.collect()
 

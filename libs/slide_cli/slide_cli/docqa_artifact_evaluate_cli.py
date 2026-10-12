@@ -22,7 +22,7 @@ def register_artifact_evaluate_command(artifacts_group: click.Group) -> None:
         runtime = notebook_cli._create_runtime()
         notebook_cli._require_session(runtime, conversation_id)
         service = notebook_cli._notebook_service()
-        notebook = service.get_notebook(conversation_id)
+        notebook = service.get_notebook(conversation_id, user_id=runtime.user_id)
         artifact = _notebook_artifact(notebook, artifact_id) if artifact_id else None
         if artifact_id and artifact is None:
             raise click.ClickException(f"Artifact '{artifact_id}' does not exist.")

@@ -1,0 +1,41 @@
+{
+  "schema_version": "ai-research-writing/paper-state-v1",
+  "mode": "full-paper",
+  "stage": "revision-verified",
+  "target_venue": "EACL 2027 System Demonstrations",
+  "main_tex": "source/main.tex",
+  "bibliography": "source/references.bib",
+  "required_artifacts": [
+    "plan/task-packets/diagnostic-case.md",
+    "plan/progress.md",
+    "audit/revision-evidence.json",
+    "numeric_evidence.json",
+    "project_inventory.md",
+    "experiment_inventory.md",
+    "figure_plan.md",
+    "case_study/manifest.json",
+    "audit/diagnostic-case-verification.json",
+    "audit/diagnostic-package-check.json",
+    "plan/task-packets/lmdoc-naming.md",
+    "plan/task-packets/reviewer-followup.md",
+    "reviewer_analysis.md",
+    "review_followup/manifest.json",
+    "audit/followup-verification.json",
+    "plan/task-packets/prose-clarity.md"
+  ],
+  "blockers": [],
+  "build": {
+    "status": "passed",
+    "command": "latexmk -pdf -interaction=nonstopmode -halt-on-error -outdir=../build-diagnostic main.tex",
+    "pdf": "build-diagnostic/main.pdf",
+    "external_inputs": [],
+    "input_sha256": "b4d7edcf91aebcc9cd6e51d95ad565e1d21ce3d6a3fb9837b0ca115c2e1b33f6",
+    "pdf_sha256": "8f131930616d465b831cb91a5e921cf265775bbeb0428cf55facc045b0f4bbe0",
+    "log": "source\\build-attestation.log",
+    "log_sha256": "7400ac0b55929d720b447611ccf89db29f20abf778cef0dd7099ef2e15ea5ff6",
+    "exit_code": 0,
+    "tool_version": "Initial Win CP for (console input, console output, system): (CP936, CP65001, CP936)",
+    "attestation": "executed",
+    "ran_at": "2026-09-23T11:07:01.955218+00:00"
+  }
+}

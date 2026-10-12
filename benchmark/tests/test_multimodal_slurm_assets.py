@@ -112,6 +112,7 @@ def test_multimodal_slurm_script_health_checks_backends_and_runs_no_think_routes
 
 def test_benchmark_runtime_isolation_helper_assigns_per_array_task_app_data(tmp_path):
     _require_posix_bash()
+    runtime_root = tmp_path / "benchmark_runtime"
     result = subprocess.run(
         [
             "bash",
@@ -122,7 +123,7 @@ def test_benchmark_runtime_isolation_helper_assigns_per_array_task_app_data(tmp_
                 "SLURM_ARRAY_JOB_ID=12345 "
                 "SLURM_ARRAY_TASK_ID=7 "
                 "SLURM_JOB_ID=67890 "
-                f"MARA_BENCHMARK_RUNTIME_ROOT={tmp_path} "
+                f"MARA_BENCHMARK_RUNTIME_ROOT={runtime_root} "
                 "mara_configure_benchmark_runtime 'statistical suite'; "
                 "printf '%s\n' \"$KH_APP_DATA_DIR\""
             ),
@@ -135,7 +136,10 @@ def test_benchmark_runtime_isolation_helper_assigns_per_array_task_app_data(tmp_
     assert result.returncode == 0, result.stderr
     app_data_dir = Path(result.stdout.strip())
     assert app_data_dir == (
-        tmp_path / "statistical-suite" / "array12345-task7-job67890" / "ktem_app_data"
+        runtime_root
+        / "statistical-suite"
+        / "array12345-task7-job67890"
+        / "ktem_app_data"
     )
     assert app_data_dir.is_dir()
 
@@ -241,6 +245,12 @@ def test_semantic_evaluator_normalizer_maps_local_alias_and_rejects_invalid_valu
         capture_output=True,
         text=True,
     )
+    enabled = subprocess.run(
+        [sys.executable, str(SEMANTIC_EVALUATOR_NORMALIZER), "on"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
     invalid = subprocess.run(
         [sys.executable, str(SEMANTIC_EVALUATOR_NORMALIZER), "not-a-backend"],
         check=False,
@@ -250,6 +260,8 @@ def test_semantic_evaluator_normalizer_maps_local_alias_and_rejects_invalid_valu
 
     assert local.returncode == 0, local.stderr
     assert local.stdout.strip() == "local_qwen3_8b"
+    assert enabled.returncode == 0, enabled.stderr
+    assert enabled.stdout.strip() == "local_qwen3_8b"
     assert invalid.returncode == 2
     assert "semantic evaluator must be" in invalid.stderr
 

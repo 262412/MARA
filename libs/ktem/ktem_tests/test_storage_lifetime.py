@@ -13,9 +13,10 @@ def _storage_api():
 
 @pytest.mark.parametrize("stored_path", ["../outside.bin", "/tmp/outside.bin"])
 def test_storage_lifetime_rejects_paths_outside_root(tmp_path, stored_path):
-    lifetime = _storage_api().StorageLifetime(tmp_path / "storage")
+    storage_api = _storage_api()
+    lifetime = storage_api.StorageLifetime(tmp_path / "storage")
 
-    with pytest.raises(ValueError, match="path"):
+    with pytest.raises(storage_api.StorageLifetimeError, match="path"):
         with lifetime.hold(stored_path):
             pass
 

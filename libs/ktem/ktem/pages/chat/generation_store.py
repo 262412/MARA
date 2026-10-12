@@ -16,6 +16,31 @@ GENERATION_CACHE: dict[str, dict[str, Any]] = {}
 ACTIVE_REQUESTS: dict[str, dict[str, str]] = {}
 # session_key -> page_key (current view)
 CURRENT_VIEW: dict[str, str] = {}
+VIEW_REVISIONS: dict[str, int] = {}
+
+
+def get_view_revision(session_key: str | None) -> int:
+    with CACHE_LOCK:
+        return VIEW_REVISIONS.get(session_key or "", 0)
+
+
+def reset_view(session_key: str | None) -> int:
+    """Invalidate the old conversation's display and page snapshots, not its work."""
+    with CACHE_LOCK:
+        key = session_key or ""
+        revision = VIEW_REVISIONS.get(key, 0) + 1
+        VIEW_REVISIONS[key] = revision
+        ACTIVE_REQUESTS.pop(key, None)
+        CURRENT_VIEW[key] = ""
+        return revision
+
+
+def try_set_current_view(session_key: str, page_key: str, revision: int) -> bool:
+    with CACHE_LOCK:
+        if VIEW_REVISIONS.get(session_key, 0) != revision:
+            return False
+        CURRENT_VIEW[session_key] = page_key
+        return True
 
 
 def make_request_key(session_key: str, page_key: str) -> str:

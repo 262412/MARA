@@ -1,6 +1,6 @@
 ---
 name: MARA-model-init-config
-description: Use when the user wants to generate a default model routing config through `MARA model init-config`.
+description: "Generate MARA model-routing configuration."
 version: 1.0.0
 ---
 

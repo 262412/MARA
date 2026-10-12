@@ -12,7 +12,10 @@ class _ArtifactNotebookService(_DummyNotebookService):
         self,
         conversation_id: str,
         artifact_id: str,
+        *,
+        user_id: str,
     ) -> dict[str, Any]:
+        assert user_id == "default"
         artifacts = cast(
             list[dict[str, Any]],
             self.notebooks[conversation_id]["artifacts"],
@@ -29,7 +32,9 @@ class _ArtifactNotebookService(_DummyNotebookService):
         *,
         export_format: str,
         path: str,
+        user_id: str,
     ) -> dict[str, Any]:
+        assert user_id == "default"
         for artifact in self.notebooks[conversation_id]["artifacts"]:
             if artifact.get("artifact_id") == artifact_id:
                 artifact.setdefault("exports", []).append(

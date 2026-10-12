@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +13,7 @@ LEGACY_SECRET_SENTINEL = "mara-desktop-legacy-secret-sentinel"
 def seed_legacy_model_routes(data_root: Path) -> Path:
     database = _database_path(data_root)
     database.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection, connection:
         connection.execute(
             "CREATE TABLE IF NOT EXISTS llm_table "
             '(name TEXT PRIMARY KEY, spec JSON, "default" BOOLEAN)'
@@ -75,7 +76,9 @@ def verify_migrated_model_routes(
     forbidden_secrets: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     database = _database_path(data_root)
-    with sqlite3.connect(f"{database.as_uri()}?mode=ro", uri=True) as connection:
+    with closing(
+        sqlite3.connect(f"{database.as_uri()}?mode=ro", uri=True)
+    ) as connection:
         llm_rows = connection.execute(
             'SELECT name, spec, "default" FROM llm_table ORDER BY name'
         ).fetchall()

@@ -7,6 +7,7 @@ from ktem.app import BasePage
 from ktem.utils.file import YAMLNoDateSafeLoader
 from theflow.utils.modules import deserialize
 
+from .config import migrate_legacy_agent_spec
 from .manager import llms
 
 
@@ -357,7 +358,7 @@ class LLMManagement(BasePage):
             spec = yaml.load(selected_spec, Loader=YAMLNoDateSafeLoader)
             info["spec"].update(spec)
 
-            llm = deserialize(info["spec"], safe=False)
+            llm = deserialize(migrate_legacy_agent_spec(info["spec"]), safe=False)
 
             if llm is None:
                 raise Exception(f"Can not found model: {selected_llm_name}")

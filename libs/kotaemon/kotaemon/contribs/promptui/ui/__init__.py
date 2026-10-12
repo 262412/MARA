@@ -10,7 +10,7 @@ from .pipeline import build_pipeline_ui
 
 
 def build_from_dict(config: Union[str, dict]):
-    """Build a full UI from YAML config file"""
+    """Build the UI; pass its gradio_launch_kwargs to launch() or mount_gradio_app()."""
 
     if isinstance(config, str):
         with open(config) as f:
@@ -37,9 +37,9 @@ def build_from_dict(config: Union[str, dict]):
             tab_names=list(config_dict.keys()),
             title="PromptUI from kotaemon",
             analytics_enabled=False,
-            theme=John(),
         )
 
+    demo.gradio_launch_kwargs = {"theme": John()} if len(demos) > 1 else {}
     demo.queue()
 
     return demo

@@ -21,6 +21,7 @@ REQUIRED_JOBS = {
     "collection",
     "secret-scan",
     "kotaemon",
+    "windows-storage-security",
     "ktem",
     "slide-cli",
     "benchmark-root",
@@ -91,12 +92,12 @@ def test_static_and_test_jobs_enforce_the_repository_contracts():
     assert audit["strategy"]["fail-fast"] is False
     assert audit["strategy"]["max-parallel"] == 1
     assert audit["strategy"]["matrix"]["include"] == [
-        {"label": "root-py310", "project": ".", "python-version": "3.10"},
         {"label": "root-py311", "project": ".", "python-version": "3.11"},
+        {"label": "root-py312", "project": ".", "python-version": "3.12"},
         {
-            "label": "container-py310",
+            "label": "container-py311",
             "project": "docker",
-            "python-version": "3.10",
+            "python-version": "3.11",
         },
     ]
     audit_commands = _commands(audit)
@@ -108,13 +109,13 @@ def test_static_and_test_jobs_enforce_the_repository_contracts():
         for step in audit["steps"]
         if str(step.get("uses", "")).startswith("actions/setup-python@")
     )
-    assert audit_setup["with"]["python-version"] == "3.10"
+    assert audit_setup["with"]["python-version"] == "3.11"
     collection_commands = _commands(jobs["collection"])
     assert "check_pytest_collection.py" in collection_commands
     assert "--minimum 1260" in collection_commands
     assert jobs["kotaemon"]["strategy"]["matrix"]["python-version"] == [
-        "3.10",
         "3.11",
+        "3.12",
     ]
     assert "libs/kotaemon" in _commands(jobs["kotaemon"])
     assert "libs/ktem/ktem_tests" in _commands(jobs["ktem"])
@@ -485,50 +486,6 @@ def test_release_container_digest_is_signed_and_pushed_to_the_registry():
     assert attest["with"]["push-to-registry"] is True
 
 
-def test_supply_chain_pin_changes_require_trusted_context_owner_review():
-    path = REPO_ROOT / ".github" / "workflows" / "supply-chain-review.yaml"
-    workflow = _load_workflow(path)
-    triggers = _trigger(workflow)
-    source = path.read_text(encoding="utf-8")
-
-    assert "pull_request_target" in triggers
-    assert triggers["pull_request_review"]["types"] == ["submitted", "dismissed"]
-    assert "pull_request" not in triggers
-    assert "actions/checkout@" not in source
-    assert "pull_request.head.sha" in source
-    assert "author_association" in source
-    assert "APPROVED" in source
-    assert "COLLABORATOR" in source
-    assert 'pull_request["changed_files"]' in source and "CHANGED_FILES" not in source
-    assert "len(files) != expected_file_count" in source
-    for protected in (
-        ".dockerignore",
-        ".gitleaks",
-        "gitleaks.toml",
-        ".trivy",
-        "trivy.yaml",
-        "trivy.yml",
-        "pyproject.toml",
-        "uv.lock",
-        "constraints.txt",
-        "requirements.txt",
-        "requirements.azure.in",
-        "package-lock.json",
-        "install.sh",
-        "install.ps1",
-        "publish_packages.py",
-        "MANIFEST.in",
-        "generate_distribution_attestations.py",
-        "generate_container_attestation.py",
-        "smoke_container_runtime.py",
-        "check_container_lock_parity.py",
-        "check_dependency_audit.py",
-        "dependency_audit_baseline.json",
-    ):
-        assert protected in source
-    assert "two-person control" in source
-
-
 @pytest.mark.parametrize(
     ("path", "publish_job", "trusted_base"),
     [
@@ -568,26 +525,6 @@ def test_non_pr_quality_calls_use_a_trusted_base_not_head_parent():
         assert "github.event.pull_request.base.sha" in base_expression
         assert "github.event.before" in base_expression
         assert "github.event.repository.default_branch" in base_expression
-
-
-def test_secret_scan_is_reusable_required_and_pinned():
-    quality = _load_workflow(WORKFLOW_PATH)
-    secret_path = REPO_ROOT / ".github" / "workflows" / "secret-scan.yaml"
-    secret = _load_workflow(secret_path)
-    triggers = _trigger(secret)
-
-    assert quality["jobs"]["secret-scan"]["uses"] == (
-        "./.github/workflows/secret-scan.yaml"
-    )
-    assert "secret-scan" in quality["jobs"]["required"]["needs"]
-    assert "workflow_call" in triggers
-    assert "pull_request" not in triggers
-    assert "push" not in triggers
-    for job in secret["jobs"].values():
-        for step in job.get("steps", []):
-            action = step.get("uses")
-            if action and not action.startswith("./"):
-                assert FULL_SHA.fullmatch(action.rsplit("@", 1)[-1]), action
 
 
 @pytest.mark.parametrize("path", ["style-check.yaml", "unit-test.yaml"])

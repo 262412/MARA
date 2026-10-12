@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+from types import SimpleNamespace
 
+import pytest
 from ktem.index.file._chat_upload_events import (
     full_upload_ports,
     quick_file_upload_ports,
@@ -16,6 +18,19 @@ from ktem.index.file._events import register_upload_events as reexported_upload_
 
 from .event_chain_spy import EventGraphSpy, linear_chain
 from .file_index_event_spy import build_upload_page
+
+
+@pytest.fixture(autouse=True)
+def hidden_result_events(monkeypatch):
+    from ktem.index.file import _chat_upload_events
+
+    events = []
+    monkeypatch.setattr(
+        _chat_upload_events.gr,
+        "JSON",
+        lambda **_: SimpleNamespace(change=lambda **kwargs: events.append(kwargs)),
+    )
+    return events
 
 
 def _fn_name(call):
@@ -33,10 +48,8 @@ def test_quick_upload_ports_preserve_scalar_list_and_none_shapes():
     assert url_ports.index.inputs[0] is page._app.chat_page.quick_urls
     assert isinstance(file_ports.index.gradio_inputs, list)
     assert file_ports.index.gradio_outputs is page.quick_upload_state
-    assert file_ports.selector_copy.gradio_inputs is page.quick_upload_state
-    assert (
-        file_ports.selector_copy.gradio_outputs is page._app.chat_page._indices_input[1]
-    )
+    assert file_ports.selector_copy.gradio_inputs is page._quick_upload_result
+    assert file_ports.selector_copy.gradio_outputs is page._quick_selection_result
     assert file_ports.focus.gradio_inputs is None
     assert file_ports.focus.gradio_outputs is None
     assert file_ports.reset.outputs == (
@@ -47,7 +60,9 @@ def test_quick_upload_ports_preserve_scalar_list_and_none_shapes():
     assert reexported_upload_events is register_upload_events
 
 
-def test_standard_quick_upload_chains_keep_exact_verbs_functions_and_parents():
+def test_standard_quick_upload_chains_keep_exact_verbs_functions_and_parents(
+    hidden_result_events,
+):
     graph = EventGraphSpy()
     page = build_upload_page(graph)
 
@@ -94,8 +109,17 @@ def test_standard_quick_upload_chains_keep_exact_verbs_functions_and_parents():
             call.node_id for call in chain[:-1]
         ]
         assert chain[3].params["inputs"] is page._app.get_event("unused")[0]["inputs"]
-        assert chain[7].params["inputs"] is page.quick_upload_state
+        assert chain[7].params["inputs"] is page._quick_upload_result
+        assert chain[7].params["outputs"] is page._quick_selection_result
         assert chain[-1].params["js"] == "focus-js"
+    assert [event["outputs"] for event in hidden_result_events] == [
+        [page._app.chat_page._indices_input[1]],
+        [page._app.chat_page.quick_file_upload, page._app.chat_page._indices_input[0]],
+        [page._app.chat_page.quick_urls, page._app.chat_page._indices_input[0]],
+    ]
+    assert all(event["fn"] is None for event in hidden_result_events)
+    assert "applyUploadSelection" in hidden_result_events[0]["js"]
+    assert all("applyUploadReset" in event["js"] for event in hidden_result_events[1:])
 
 
 def test_demo_quick_upload_omits_file_trigger_and_file_list_refresh_only():

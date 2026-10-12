@@ -76,6 +76,7 @@ def test_document_metadata_preview_and_body_are_sanitized(tmp_path):
             "file_name": f"quarterly {HOSTILE_HTML}.pdf",
             "file_path": str(pdf_path),
             "file_type": "application/pdf",
+            "page_number": 7,
             "page_label": 7,
             "reranking_score": 0.8,
         },

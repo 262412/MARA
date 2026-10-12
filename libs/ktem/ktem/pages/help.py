@@ -1,5 +1,4 @@
 import re
-from importlib.metadata import version
 from pathlib import Path
 
 import gradio as gr
@@ -10,6 +9,7 @@ from theflow.settings import settings
 
 KH_DEMO_MODE = getattr(settings, "KH_DEMO_MODE", False)
 HF_SPACE_URL = config("HF_SPACE_URL", default="")
+ALLOW_REMOTE_HELP = config("MARA_ALLOW_REMOTE_HELP", default=True, cast=bool)
 LOCAL_MARKDOWN_IMAGE_RE = re.compile(r"!\[([^]]*)]\(([^)\s]+)\)")
 
 
@@ -34,8 +34,10 @@ def _rewrite_local_image_links(markdown: str, doc_dir: str | Path) -> str:
 
 
 def get_remote_doc(url: str) -> str:
+    if not ALLOW_REMOTE_HELP:
+        return ""
     try:
-        res = requests.get(url)
+        res = requests.get(url, timeout=(3, 5))
         res.raise_for_status()
         return res.text
     except Exception as e:
@@ -44,8 +46,12 @@ def get_remote_doc(url: str) -> str:
 
 
 def download_changelogs(release_url: str) -> str:
+    if not ALLOW_REMOTE_HELP:
+        return ""
     try:
-        res = requests.get(release_url).json()
+        response = requests.get(release_url, timeout=(3, 5))
+        response.raise_for_status()
+        res = response.json()
         changelogs = res.get("body", "")
 
         return changelogs
@@ -104,8 +110,12 @@ class HelpPage:
             # try retrieve from cache
             changelogs = ""
 
-            if (self.changelogs_cache_dir / f"{version}.md").exists():
-                with open(self.changelogs_cache_dir / f"{version}.md", "r") as fi:
+            if (self.changelogs_cache_dir / f"{self.app_version}.md").exists():
+                with open(
+                    self.changelogs_cache_dir / f"{self.app_version}.md",
+                    "r",
+                    encoding="utf-8",
+                ) as fi:
                     changelogs = fi.read()
             else:
                 release_url_base = (
@@ -119,7 +129,9 @@ class HelpPage:
                 if not self.changelogs_cache_dir.exists():
                     self.changelogs_cache_dir.mkdir(parents=True, exist_ok=True)
                 with open(
-                    self.changelogs_cache_dir / f"{self.app_version}.md", "w"
+                    self.changelogs_cache_dir / f"{self.app_version}.md",
+                    "w",
+                    encoding="utf-8",
                 ) as fi:
                     fi.write(changelogs)
 
@@ -128,10 +140,12 @@ class HelpPage:
                     gr.Markdown(changelogs)
 
     def _load_doc_markdown(self, filename: str) -> str:
-        doc_path = self.doc_dir / filename
-        if doc_path.exists():
-            markdown = doc_path.read_text(encoding="utf-8")
-            return _rewrite_local_image_links(markdown, self.doc_dir)
+        bundled_docs = Path(__file__).resolve().parents[1] / "assets" / "md"
+        for directory in (self.doc_dir, bundled_docs):
+            doc_path = directory / filename
+            if doc_path.is_file():
+                markdown = doc_path.read_text(encoding="utf-8")
+                return _rewrite_local_image_links(markdown, directory)
 
         return get_remote_doc(
             f"{self.remote_content_url}/v{self.app_version}/docs/{filename}"

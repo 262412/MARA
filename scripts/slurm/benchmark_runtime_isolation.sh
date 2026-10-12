@@ -73,6 +73,9 @@ mara_benchmark_write_settings_source() {
 STORAGE = dict(STORAGE)
 STORAGE["prefix"] = os.environ["MARA_BENCHMARK_STORAGE_PREFIX"]
 KH_APP_DATA_DIR = Path(os.environ["KH_APP_DATA_DIR"]).resolve()
+from kotaemon.storages.vectorstores.migration import default_namespace
+KH_VECTORSTORE = dict(KH_VECTORSTORE)
+KH_VECTORSTORE["namespace"] = default_namespace(KH_APP_DATA_DIR / "user_data")
 THEFLOW_TEMP_PATH = os.environ["THEFLOW_TEMP_PATH"]
 KH_SETTINGS_SOURCE = "benchmark-runtime"
 PY
@@ -135,6 +138,13 @@ mara_configure_benchmark_runtime() {
   runtime_root="$(realpath -m "$runtime_root")"
   runtime_dir="${runtime_root}/${suite_slug}/${task_slug}"
   suite_dir="$(dirname "$runtime_dir")"
+  case "$(basename "$runtime_root")" in
+    benchmark_*) ;;
+    *)
+      mara_benchmark_die "runtime root must use a benchmark_* basename: $runtime_root"
+      return 2
+      ;;
+  esac
 
   # A runtime under the source checkout could resolve to the checkout .theflow
   # tree.  Refuse it before creating anything there.
@@ -159,6 +169,7 @@ mara_configure_benchmark_runtime() {
   export MARA_BENCHMARK_RUNTIME_DIR="$runtime_dir"
   export MARA_RUNTIME_DIR="$runtime_dir"
   export KH_APP_DATA_DIR="$runtime_dir/ktem_app_data"
+  export MARA_QDRANT_NAMESPACE=""
   export MARA_BENCHMARK_THEFLOW_DIR="$runtime_dir/theflow"
   export MARA_BENCHMARK_STORAGE_PREFIX="$MARA_BENCHMARK_THEFLOW_DIR"
   export THEFLOW_TEMP_PATH="$runtime_dir/theflow-temp"
@@ -353,12 +364,17 @@ for name, value in {
     "KH_DATABASE": str(getattr(flowsettings, "KH_DATABASE", "")),
     "KH_FILESTORAGE_PATH": str(getattr(flowsettings, "KH_FILESTORAGE_PATH", "")),
     "KH_DOCSTORE.path": str((getattr(flowsettings, "KH_DOCSTORE", {}) or {}).get("path", "")),
-    "KH_VECTORSTORE.path": str((getattr(flowsettings, "KH_VECTORSTORE", {}) or {}).get("path", "")),
+    "KH_VECTORSTORE.migration_path": str((getattr(flowsettings, "KH_VECTORSTORE", {}) or {}).get("migration_path", "")),
 }.items():
     path_value = value.removeprefix("sqlite:///")
     if not path_value:
         raise SystemExit(f"{name} is missing from the job settings")
     assert_inside(resolved(path_value), runtime_dir, name)
+
+from kotaemon.storages.vectorstores.migration import default_namespace
+vector_config = flowsettings.KH_VECTORSTORE
+if vector_config.get("namespace") != default_namespace(app_data / "user_data"):
+    raise SystemExit("Qdrant namespace is not job-owned")
 
 payload = {
     "contract_id": "benchmark_runtime_contract.v1",
@@ -381,6 +397,7 @@ payload = {
     "flowsettings.KH_APP_DATA_DIR": str(resolved(getattr(flowsettings, "KH_APP_DATA_DIR", ""))),
     "THEFLOW_TEMP_PATH": str(temp_path),
     "UV_PROJECT_ENVIRONMENT": os.environ["UV_PROJECT_ENVIRONMENT"],
+    "qdrant_namespace": vector_config["namespace"],
 }
 contract_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 for key, value in payload.items():
@@ -397,7 +414,7 @@ mara_bootstrap_benchmark_runtime() {
   # shared checkout .venv or performing editable installs there.
   (
     cd "$MARA_BENCHMARK_PROJECT_ROOT"
-    "$uv_command" sync --frozen --no-dev --extra mara --python 3.10
+    "$uv_command" sync --frozen --no-dev --extra mara --python 3.11
   )
   [[ -x "$MARA_BENCHMARK_PYTHON" ]] || {
     mara_benchmark_die "frozen sync did not create $MARA_BENCHMARK_PYTHON"

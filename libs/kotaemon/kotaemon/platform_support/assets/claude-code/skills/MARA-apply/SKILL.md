@@ -1,6 +1,6 @@
 ---
 name: MARA-apply
-description: Use this skill to apply slide patches with `MARA apply`.
+description: "Apply an existing slide patch with MARA apply."
 version: 1.0.0
 ---
 

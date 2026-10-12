@@ -20,7 +20,7 @@ foreach ($candidate in $pythonCandidates) {
     $resolved = Get-Command $candidate -ErrorAction SilentlyContinue
     if ($resolved) {
         if ($candidate -eq "py") {
-            $pythonCommand = @("py", "-3.10")
+            $pythonCommand = @("py", "-3.11")
         } else {
             $pythonCommand = @($candidate)
         }
@@ -29,7 +29,7 @@ foreach ($candidate in $pythonCandidates) {
 }
 
 if (-not $pythonCommand) {
-    throw "Python 3.10+ was not found on PATH."
+    throw "Python 3.11+ was not found on PATH."
 }
 
 $scriptPath = Join-Path $scriptRoot "publish_packages.py"

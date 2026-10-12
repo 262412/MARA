@@ -77,8 +77,10 @@ def test_chat_create_pipeline_builds_controller_enabled_docqa_request():
 def test_submit_msg_indexes_attached_files_into_selected_scope():
     page = cast(Any, object.__new__(ChatPage))
     indexed_calls = []
+    incoming_request = SimpleNamespace()
 
-    def index_files(files, reindex, settings, user_id):
+    def index_files(files, reindex, settings, user_id, *, request):
+        assert request is incoming_request
         indexed_calls.append((files, reindex, settings, user_id))
         return ["file-1"]
 
@@ -95,7 +97,7 @@ def test_submit_msg_indexes_attached_files_into_selected_scope():
         [],
         "",
         "",
-        request=SimpleNamespace(),
+        request=incoming_request,
     )
 
     assert indexed_calls == [(["/tmp/alpha.pdf"], True, {"reasoning.use": "mara"}, 1)]
@@ -493,7 +495,9 @@ def test_chat_fn_final_output_preserves_last_streamed_answer_frame():
     assert "runtime answer" in final[5]
     assert "short final answer" not in final[5]
     assert final[0] == [("What changed?", "runtime answer")]
-    assert final[-1] == [("What changed?", "runtime answer")]
+    # Completion validation receives the authoritative final response; the
+    # longer streamed display is only the page projection.
+    assert final[-1] == [("What changed?", "short final answer")]
 
 
 def test_typewriter_display_frames_are_bounded_for_large_answer_delta():

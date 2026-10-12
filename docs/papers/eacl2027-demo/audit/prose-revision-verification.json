@@ -1,0 +1,13 @@
+{
+  "baseline_commit": "2f58e6a78bc00047fb468b985c597aa4bc556578",
+  "benchmark_tables_unchanged": true,
+  "protected_evidence_and_bibliography_unchanged": true,
+  "abstract_matches_submission_field": true,
+  "harbor_context_precedes_table_in_source": true,
+  "rendered_harbor_context_page": 4,
+  "rendered_inspection_table_page": 5,
+  "inspection_table_number": 3,
+  "superseded_terms_absent_from_manuscript": true,
+  "all_fourteen_rendered_pages_visually_checked": true,
+  "no_new_experiments": true
+}

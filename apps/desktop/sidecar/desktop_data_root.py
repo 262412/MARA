@@ -26,8 +26,18 @@ def configure_desktop_data_root(data_root: Path) -> Path:
 
     for directory in DESKTOP_DATA_DIRECTORIES:
         (resolved_root / directory).mkdir(parents=True, exist_ok=True)
-    app_data_dir = resolved_root / "state" / "ktem_app_data"
+    if os.environ.get("MARA_APP_HOME", "").strip():
+        from ktem.runtime_bootstrap import get_runtime_paths, load_packaged_runtime_env
+
+        load_packaged_runtime_env()
+        app_data_dir = (
+            Path(os.environ.get("KH_APP_DATA_DIR") or get_runtime_paths().data_dir)
+            .expanduser()
+            .resolve()
+        )
+    else:
+        app_data_dir = resolved_root / "state" / "ktem_app_data"
+        os.environ["KH_OFFICE_TO_PDF_INDEXING"] = "false"
     app_data_dir.mkdir(parents=True, exist_ok=True)
     os.environ["KH_APP_DATA_DIR"] = str(app_data_dir)
-    os.environ["KH_OFFICE_TO_PDF_INDEXING"] = "false"
     return app_data_dir

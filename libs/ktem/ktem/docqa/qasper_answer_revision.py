@@ -189,13 +189,20 @@ def _eligible(request: Any, verify_decision: Any) -> bool:
     ]
     typed = getattr(verify_decision, "typed_authority", {})
     typed = typed if isinstance(typed, dict) else {}
+    missing_authority = typed.get("state") == "missing" and typed.get("reason") in {
+        "claim_extension_unverified",
+        "answer_relation_unresolved",
+        "required_support_slot_missing",
+    }
+    layered_revision = typed.get("state") == "verified_support" and bool(
+        str(typed.get("revision_candidate") or "").strip()
+    )
     return bool(
         domain == "qasper"
         and normalized_type == "free_text"
         and len(required) == 1
         and required[0].statement_kind == "answer_relation"
-        and typed.get("state") == "missing"
-        and typed.get("reason") == "claim_extension_unverified"
+        and (missing_authority or layered_revision)
     )
 
 

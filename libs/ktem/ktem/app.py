@@ -22,7 +22,7 @@ _PageT = TypeVar("_PageT")
 def compose_blocks_js(main_js: str, helper_js: str = "") -> str:
     """Compose Gradio Blocks JS into a callable expression.
 
-    `gr.Blocks(js=...)` expects a callable JavaScript expression because the
+    `demo.launch(js=...)` expects a callable JavaScript expression because the
     frontend wraps it as `(<js>)()`. When we need helper script code before the
     main `run()` entrypoint, we must wrap both into a single function body and
     explicitly return `run()`.
@@ -85,7 +85,11 @@ class BaseApp:
             self._safe_dom_js = fi.read()
         with (dir_assets / "js" / "main.js").open() as fi:
             self._js = compose_blocks_js(
-                fi.read(), f"{self._safe_dom_js}\n{self._kg_viewer_js}"
+                fi.read(),
+                f"{self._safe_dom_js}\n{self._kg_viewer_js}\n"
+                + (dir_assets / "js" / "file_browser_refresh.js").read_text(
+                    encoding="utf-8"
+                ),
             )
             pdfjs_dir = get_pdfjs_runtime_dir(
                 getattr(settings, "KH_APP_DATA_DIR", None)
@@ -223,6 +227,7 @@ class BaseApp:
         """Called when the app is created"""
 
     def make(self):
+        """Build the UI; pass gradio_launch_kwargs when launching or mounting it."""
         markmap_js = """
         <script>
             window.markmap = {
@@ -245,14 +250,13 @@ class BaseApp:
             "<script defer src='https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js'></script>"  # noqa
         )
 
-        with gr.Blocks(
-            theme=self._theme,
-            css=self._css,
-            title=self.app_name,
-            analytics_enabled=False,
-            js=self._js,
-            head=external_js,
-        ) as demo:
+        self.gradio_launch_kwargs = {
+            "theme": self._theme,
+            "css": self._css,
+            "js": self._js,
+            "head": external_js,
+        }
+        with gr.Blocks(title=self.app_name, analytics_enabled=False) as demo:
             self.app = demo
             self.settings_state.render()
             self.user_id.render()

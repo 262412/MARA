@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from copy import deepcopy
 from typing import Any
 
 from ktem.docqa.question_proposition import build_question_proposition
@@ -18,6 +19,8 @@ _CANDIDATE_SELECTORS_PER_RECORD = 4
 def prioritized_candidate_prompt_evidence(
     evidence: list[dict[str, Any]],
     question: str,
+    *,
+    candidate_transaction_id: str = "",
 ) -> list[dict[str, Any]]:
     projections: list[dict[str, Any]] = []
     for record in evidence:
@@ -54,19 +57,24 @@ def prioritized_candidate_prompt_evidence(
             }
         )
 
+    priorities = _canonical_priorities(
+        projections,
+        question,
+        candidate_transaction_id=candidate_transaction_id,
+    )
     output: list[dict[str, Any]] = []
-    for projection in projections:
-        selected_plan_refs, canonical_refs = _record_canonical_priorities(
-            projection,
-            question,
-        )
+    for projection, priority in zip(projections, priorities):
+        selected_plan_refs, canonical_refs, canonical_selectors = priority
         options, proposition_bearing_refs = _prioritized_proposition_bearing_options(
             projection["eligible_options"],
             selected_plan_refs=selected_plan_refs,
             canonical_refs=canonical_refs,
         )
         projected = projection["record"]
-        projected["selectors"] = _candidate_selectors_from_options(options)
+        projected["selectors"] = _canonical_selectors_for_options(
+            options,
+            canonical_selectors,
+        )
         projected[
             "candidate_selector_projection_trace"
         ] = _candidate_selector_projection_trace(
@@ -81,13 +89,61 @@ def prioritized_candidate_prompt_evidence(
     return output
 
 
+def _canonical_priorities(
+    projections: list[dict[str, Any]],
+    question: str,
+    *,
+    candidate_transaction_id: str = "",
+) -> list[tuple[list[str], list[str], dict[str, dict[str, Any]]]]:
+    """Preserve local plans; validate missing contributions against joint evidence."""
+
+    priorities = [
+        _record_canonical_priorities(
+            projection, question, candidate_transaction_id=candidate_transaction_id
+        )
+        for projection in projections
+    ]
+    if all(ref in selectors for _, refs, selectors in priorities for ref in refs):
+        return priorities
+
+    canonical_records, _ = prepare_qasper_canonical_records_with_trace(
+        question,
+        [
+            {
+                **projection["record"],
+                "selectors": _candidate_selectors_from_options(
+                    projection["eligible_options"]
+                ),
+            }
+            for projection in projections
+        ],
+        candidate_transaction_id=candidate_transaction_id,
+    )
+    joint_selectors = {
+        str(selector.get("selector_id") or ""): deepcopy(selector)
+        for record in canonical_records
+        for selector in record.get("selectors") or []
+        if str(selector.get("selector_id") or "")
+    }
+    for _, refs, selectors in priorities:
+        refs[:] = [ref for ref in refs if ref in selectors or ref in joint_selectors]
+        selectors.update(
+            (ref, deepcopy(joint_selectors[ref]))
+            for ref in refs
+            if ref not in selectors
+        )
+    return priorities
+
+
 def _record_canonical_priorities(
     projection: dict[str, Any],
     question: str,
-) -> tuple[list[str], list[str]]:
+    *,
+    candidate_transaction_id: str = "",
+) -> tuple[list[str], list[str], dict[str, dict[str, Any]]]:
     """Classify spans before the per-record selector cap is applied."""
 
-    _records, trace = prepare_qasper_canonical_records_with_trace(
+    canonical_records, trace = prepare_qasper_canonical_records_with_trace(
         question,
         [
             {
@@ -97,7 +153,14 @@ def _record_canonical_priorities(
                 ),
             }
         ],
+        candidate_transaction_id=candidate_transaction_id,
     )
+    canonical_selectors = {
+        str(selector.get("selector_id") or ""): deepcopy(selector)
+        for record in canonical_records
+        for selector in record.get("selectors") or []
+        if str(selector.get("selector_id") or "")
+    }
     object_contribution_refs = [
         str(option.get("evidence_ref") or "")
         for option in projection["eligible_options"]
@@ -113,6 +176,7 @@ def _record_canonical_priorities(
                 ]
             )
         ),
+        canonical_selectors,
     )
 
 
@@ -144,15 +208,31 @@ def _cross_record_object_contribution(option: dict[str, Any], question: str) -> 
 def _candidate_selectors_from_options(
     options: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    return [
-        {
-            "selector_id": option["evidence_ref"],
-            "text": option["text"],
-            "span_start": option["span_start"],
-            "span_end": option["span_end"],
-        }
-        for option in options
-    ]
+    selectors: list[dict[str, Any]] = []
+    for option in options:
+        selector = deepcopy(option)
+        selector.update(
+            selector_id=option["evidence_ref"],
+            text=option["text"],
+            span_start=option["span_start"],
+            span_end=option["span_end"],
+        )
+        selectors.append(selector)
+    return selectors
+
+
+def _canonical_selectors_for_options(
+    options: list[dict[str, Any]],
+    canonical_selectors: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    selectors: list[dict[str, Any]] = []
+    for option in options:
+        evidence_ref = str(option.get("evidence_ref") or "")
+        selector = canonical_selectors.get(evidence_ref)
+        if selector is None:
+            raise ValueError("candidate_canonical_selector_missing")
+        selectors.append(deepcopy(selector))
+    return selectors
 
 
 def _prioritized_proposition_bearing_options(

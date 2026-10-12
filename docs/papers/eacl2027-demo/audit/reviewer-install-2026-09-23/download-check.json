@@ -1,0 +1,25 @@
+{
+  "base": "D:\\MARA-reviewer-test\\20260922T161319Z",
+  "checked_at_utc": "2026-09-22T16:16:08.072064+00:00",
+  "downloads": [
+    {
+      "name": "source.zip",
+      "url": "https://github.com/262412/MARA/archive/refs/tags/v0.0.40.zip",
+      "status": 200,
+      "redirected_to": "https://codeload.github.com/262412/MARA/zip/refs/tags/v0.0.40",
+      "zip_crc_error": null,
+      "members": 1402,
+      "bytes": 5746374,
+      "sha256": "6e75c2503cd7092c98f78a3875076746f3cdee79e034f429eabf3d36804518bb",
+      "ok": true,
+      "elapsed_seconds": 167.67
+    },
+    {
+      "name": "slide-app.zip",
+      "url": "https://github.com/262412/MARA/releases/download/v0.0.40/slide-app.zip",
+      "ok": false,
+      "error": "The read operation timed out",
+      "elapsed_seconds": 107.54
+    }
+  ]
+}

@@ -1,0 +1,198 @@
+\section{Controller Rules and Execution Semantics}
+\label{app:rules}
+This appendix describes the public v0.0.40 source anchor, commit
+\path{37487f35610076c1016e1b59d3bf982388d1a275}.
+The run bundle does not include a source commit for each job. Consequently, this release anchor documents the distributed implementation, but is not a per-job build attestation.
+
+\subsection{Modality Confidence and Route Selection}
+The scorer is implemented in \path{libs/ktem/ktem/reasoning/mara_route_scorer.py}; cost adjustments and tie breaking are in \path{mara_route_costing.py} in the same directory. For modality $m$, its probe confidence is zero if no evidence is present. Otherwise it is the clipped and four-decimal-rounded value
+\begin{align}
+ c_m=\operatorname{clip}_{[0,1]}\big(&b_m+0.04\min(n_m,3)\nonumber\\
+ &+0.14s_m+0.08d_m+0.16\ell_m\nonumber\\
+ &+i_m+t_m-0.25(1-h_m)\big),
+\end{align}
+where $n_m$ is evidence count, $s_m$ is the bounded top score, $d_m$ is its margin over the second score, $\ell_m$ is source/page locator coverage, and $h_m$ is a backend-health indicator. These features are proxies, not calibrated probabilities.
+
+The bases $(b_T,b_V,b_E,b_G)$ are $(0.45,0.35,0.35,0.30)$. Visual, element, and graph intent add $0.12$, $0.15$, and $0.20$ to the corresponding modality. Text/OCR availability adds $0.08$ for text or $0.05$ for visual/element evidence; graph has no such bonus. If every probe is empty, the implementation inserts a text prior with one item, locator quality $0.7$, and text availability; visual intent can also insert a visual prior. These defaults must not be read as observed retrieval success.
+
+Text/OCR intent terms, task type, and scope drive heuristic features. Examples include visual terms such as \emph{figure}, \emph{chart}, and \emph{layout}; element terms such as \emph{table}, \emph{row}, and \emph{cell}; and calculation terms such as \emph{ratio}, \emph{average}, and \emph{sum}. Graph intent includes summary/compare/study-guide tasks or corresponding question terms.
+
+Element coverage is eligible when evidence is nonempty, locator quality is at least $0.5$, and text/OCR is present. Hybrid eligibility requires text confidence at least $0.45$, either visual or element confidence at least $0.45$, and no graph intent. On MMDocRAG without visual intent and with text confidence at least $0.65$, effective visual confidence is capped at $0.45$.
+
+Using these effective confidences, the initial quality proxies are
+\begin{align*}
+ \widehat Q_T&=0.15+c_T,\\
+ \widehat Q_V&=0.10+c_V,\\
+ \widehat Q_E&=0.10+c_E,\\
+ \widehat Q_G&=0.05+c_G,\\
+ \widehat Q_H&=0.20+(c_T+\max(c_V,c_E))/2.
+\end{align*}
+The element and hybrid expressions start at zero when their eligibility conditions fail. Table~\ref{tab:quality-rules} lists subsequent additions. Quality values are then floored at zero, with four-decimal rounding.
+
+\begin{table*}[t]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}Xrrrrr@{}}
+\toprule
+Condition & Text & Page & Element & Graph & Hybrid \\
+\midrule
+Visual intent & $-0.08$ & $+0.32$ & 0 & 0 & 0 \\
+Element intent & 0 & 0 & $+0.25$ if eligible & 0 & $+0.10$ if eligible \\
+Structured calculation & $+0.10$ & 0 & $+0.15$ if eligible & 0 & $+0.12$ if eligible \\
+Graph intent present / absent & 0 & 0 & 0 & $+0.35$ / $-0.25$ & 0 \\
+$c_T\geq0.65$ and no visual intent & $+0.25$ & $-0.20$ & 0 & 0 & $-0.10$ \\
+MMDocRAG and no visual intent & $+0.20$ & $-0.20$ & 0 & 0 & $-0.12$ \\
+Finance and structured calculation & $+0.20$ & 0 & 0 & 0 & $-0.05$ \\
+\bottomrule
+\end{tabularx}
+\caption{Additive quality-proxy rules. Conditions can accumulate. Dataset-family rules are explicit implementation choices, not learned generalization.}
+\label{tab:quality-rules}
+\end{table*}
+
+The base cost penalties are reported in Section~\ref{sec:controller}. Visual intent reduces page-image cost by $0.18$; eligible element intent reduces element cost by $0.05$. MMDocRAG adds $0.22$ to page-image and $0.18$ to hybrid cost. A missing visual generator adds $0.05$ to page-image cost with visual intent, or $0.25$ without it, and adds $0.12$ to hybrid cost. Costs are floored at zero and rounded to four decimals.
+
+The scorer skips ineligible element retrieval. It skips page-image and hybrid routes on MMDocRAG when $c_T\geq0.65$ and visual intent is absent. It also skips either of those routes when cost is at least $0.55$ and its quality proxy does not exceed the text proxy. Among allowed, non-skipped candidates it maximizes $\max(0,\widehat Q-\widehat C)$. Equal scores prefer text, page-image, element, hybrid, then global graph. If no candidate remains, it falls back to permitted text or the first permitted route. The automatic benchmark route list contains those five evidence routes, rather than the separate direct-answer and guarded comparison configurations.
+
+\subsection{Adequacy, Verification, and Recovery}
+The relevant sources are \path{libs/ktem/ktem/docqa/controller.py}, \path{retrieval_adequacy.py}, \path{verification.py}, and \path{execution.py} in that DocQA directory, together with \path{libs/ktem/ktem/reasoning/mara.py}.
+
+For ordinary retrieval, captured concrete evidence yields a \emph{good} decision unless a domain adequacy rule fails. Metadata without concrete evidence is \emph{ambiguous}; absent evidence is \emph{poor}. Finance checks look for required statement fields and, depending on origin, page-scoped support. These are permissive heuristics, not a universal numeric retrieval-quality threshold. For example, a finance request can pass when some required field aliases are present even if others are absent; benchmark-origin finance requests relax the page-scoping requirement.
+
+Verification first checks domain support, contradictions, semantic rules, and token overlap. The general lexical path accepts overlap of at least $\min(2,\text{number of claim tokens})$, with additional short-evidence and source-summary rules. For claims that do not pass support checks, the unsupported-confidence threshold is $0.85$ in light mode, $0.75$ in strict mode, and $0.90$ in the finance domain. These thresholds act on heuristic values: explicit domain rejection gives $1.0$, contradiction $0.95$, certain unsupported summaries $0.85$, a strict directional-conflict condition $0.78$, and missing evidence tokens $0.80$; the remaining default is $0.55$. None is an independently calibrated probability. Unsupported claims request revision; insufficient evidence can request retry or abstention, and guardrail handling determines the returned answer.
+
+There are two retrieval mechanisms. The pipeline-level \path{_should_retry_retrieval} returns true only for thorough mode with no retrieved documents. In the structured controller, \path{_retrieve_and_evaluate} repeats an ambiguous retrieval once. If retrieval remains non-good, \path{_switch_after_failed_retrieval} iterates alternative permitted routes until one yields good evidence. Each candidate can itself undergo the ambiguous-retrieval repeat. The result records the successful alternative; if none succeeds, execution returns the guarded result for the failed initial decision. Therefore the switch flag counts recorded successful recovery, not all attempted routes. The release does not implement the blanket assertion that total execution is capped at one retrieval retry.
+
+\subsection{Visual Evidence Versus Visual Generation}
+The source \path{libs/ktem/ktem/reasoning/mara_visual_answering.py} can return an OCR-extracted short answer before calling a VLM. For benchmark-origin requests, it searches visual evidence text for short answer-bearing patterns. With no visual generator it can return an evidence-only message or let another generation path handle the request, depending on configuration. The synthesis column \path{generator_backend} records configured identities such as \path{Qwen/Qwen3-8B} and \path{local_qwen3_vl}; the metric CSV does not contain the per-answer \path{generation_backend} or \path{visual_generation_gate} fields needed to identify these paths. A future generator comparison must export those fields and generated answers before attributing differences to a VLM.
+
+\section{Coverage and Complete Diagnostics}
+\label{app:results}
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Dataset & Questions & Sets & Records \\
+\midrule
+QASPER & 200 & 4 & 600 \\
+ALCE-ASQA & 200 & 4 & 600 \\
+MMDocRAG & 120 & 20 & 600 \\
+FinanceBench & 150 & 3 & 600 \\
+RAGTruth & 300 & 6 & 900 \\
+SlideVQA & 120 & 4 & 240 \\
+\midrule
+Total & 1,090 & 41 & 3,540 \\
+\bottomrule
+\end{tabular}
+\caption{An artifact set is a completed run/shard directory with prediction and report outputs. One set can contain multiple route configurations. Questions count unique dataset--example identifiers, and records count configuration-specific outputs.}
+\label{tab:coverage}
+\end{table}
+
+\subsection{Metrics and Interpretation}
+Tables~\ref{tab:all-quality} and \ref{tab:all-operations} include every dataset/configuration row in the released aggregate table. Missing metrics are shown as dashes, not zeros. Citation metadata recall and inline recall are kept separate. Metadata can include evidence attached by an adapter and must not be interpreted as verified support for every generated claim. Unsupported-claim rates come from the system's own verifier. False abstention is the harness flag against a nonempty reference answer, not a human assessment of answerability.
+
+F1 and EM score the harness's normalized \path{answer_for_scoring}, which can differ from the user-facing answer. The historical synthesis does not include either answer string. In contrast, the separate case package preserves both strings, raw provider output, and intermediate answer stages (Appendix~\ref{app:case}); it does not retroactively fill the historical gaps. SlideVQA's two configurations tie on all six published paired quality/locator metrics, despite 25 distinct per-example F1 values. Their mean recorded generation times are 4.61 and 2.55 seconds. This limits generator comparison even though routing probes are observable. The RAGTruth rows likewise belong to the local document-QA adaptation; token F1 is not the official hallucination-detection evaluation.
+
+The instrumented \path{total_seconds} values have separate index and generation fields, while parse/retrieval fields in this bundle are zero. Zero instrumented retrieval time must not be interpreted as free retrieval. These logs do not establish full interactive startup latency, comparable cache state, or monetary/energy cost. The table's p95 is the sorted value at rounded index $0.95(n-1)$, as in the released synthesis script. Runtime scoring penalties in Section~\ref{sec:controller} are unrelated units.
+
+\input{diagnostic_tables}
+
+\subsection{Oracle Definitions and Pairing}
+Let $a_i$ be controller F1 and $b_i$ the largest observed F1 among fixed comparison configurations for question $i$. The bundle excludes \path{controller_auto} when constructing $b_i$. We distinguish the signed difference of means
+\[
+ D=\frac1n\sum_i(b_i-a_i)
+\]
+from its recorded positive-part regret
+\[
+ R_+=\frac1n\sum_i\max(b_i-a_i,0).
+\]
+The two differ when auto beats every fixed comparison on some examples. MMDocRAG has $D=8.66$ and $R_+=11.05$ on a 0--100 F1 scale. Neither is a clean estimate of recoverable routing loss because fixed configurations can differ in generators, guards, and execution budgets. On FinanceBench the best comparison is direct-answer for 79 questions and guarded for 22; neither is an automatic evidence-route option. We therefore report this as a diagnostic envelope and avoid a claimed reachable-oracle percentage.
+
+Bootstrap analysis joins by dataset and example ID. Each resample draws $n$ paired differences with replacement; 1,000 resampled means are sorted and the rounded-index 2.5th and 97.5th percentiles are used. The seed is reset to 20260705 for each comparison, matching the release script. Wins and losses are based on rounded four-decimal paired differences. These intervals describe the fixed existing sample and do not measure robustness across seeds, model families, or independent reruns.
+
+\subsection{Execution Provenance and Resource Limits}
+The input manifest identifies two A100 GPUs per shard for QASPER, ALCE-ASQA, FinanceBench, and RAGTruth, and two L40S GPUs for MMDocRAG and SlideVQA. The common text job timeout field is 180 seconds. MMDocRAG text and element jobs record 360 seconds, hybrid and page-image jobs 600 seconds, and controller jobs 360 seconds; SlideVQA records 360 seconds. These manifest timeout fields must not be conflated with the route-level timeout, which defaults to 90 seconds for auto/guarded in the distributed route configuration.
+
+All four MMDocRAG controller shards use a distinct manifest named
+\path{mmdocrag-dev15-stat120-controller-t360.routes.json};
+other MMDocRAG configurations use
+\path{mmdocrag-dev15-stat120.routes.json}.
+The controller run names identify an extended-timeout repair. The synthesis lists manifest paths but does not embed their effective JSON, so their exact setting differences cannot be independently reconstructed from this ZIP. One text shard also comes from a missing-PDF repair run. Zero recorded route timeouts in the retained runs therefore does not demonstrate equivalent timeout tolerance.
+
+The synthesis report is dated 5 July 2026 and is distributed as a v0.0.40 release asset. It includes aggregate metrics, paired deltas, bootstrap intervals, oracle rows, win/loss/tie counts, per-example metric records, the run ledger, input manifest, and synthesis script. Original raw predictions, effective route manifests, and per-job source/build identities are not included. The released tables can be reproduced from their metric records; exact end-to-end reruns require additional source data and configuration provenance. Separate post-hoc RAGTruth prompt-budget diagnostics are not pooled into these numbers.
+
+\section{Artifact Access and Demonstration Deployment}
+\label{app:artifact}
+The public release is
+\url{https://github.com/262412/MARA/releases/tag/v0.0.40}.
+Its assets include the updated Windows installer \path{slide-app.zip}, its SHA-256 file,
+\path{mara-full-system-benchmark-synthesis-v0.0.40.zip},
+and the historical release's source archive. The repository is
+\url{https://github.com/262412/MARA};
+the video is
+\url{https://youtu.be/owRaHCzSVNg}.
+These are also the links to enter in the submission form.
+
+\subsection{Reviewer Installation}
+For Windows x64, download \path{slide-app.zip} from the release page and extract it to a writable directory. Run \path{Install.cmd} to prepare the environment, then \path{Start.cmd} to launch the Web UI. The installer sets up Python and pinned dependencies in an independent environment. Initial setup requires internet access; an existing Python installation, Git, or compiler is not required.
+
+In the Web UI's resources tab, configure a chat model and an embedding model using the user's own local services or API credentials. Import the included sample document, wait for indexing to finish, and ask a question. The interface displays the answer, citations, and reasoning status. The package README provides the sample question, model-configuration instructions, and CLI usage through \path{MARA.cmd}. Model weights and credentials are supplied by the user.
+
+\subsection{Demonstration Naming and Deployment}
+LMDoc is the system name used throughout this paper. The accompanying video, interface screenshot, and downloadable software retain the original release name MARA. Commands and diagnostic records preserve their released identifiers. The video illustrates source selection, page preview, text questions, citations, and the reasoning-status card. Its user deployment uses Deepseek/Google APIs and a packaged UI label of 0.0.18. The benchmark identifies Qwen3-8B/bge-m3 and the repository release \path{v0.0.40}. These are deployment and distribution identifiers, not interchangeable claims about one executable. In the released code, the displayed app version may come from \path{KH_APP_VERSION} or installed package metadata; a UI version string alone is not a source-commit identifier. We do not infer binary equivalence between the recording and benchmark release.
+
+The recording is a user-workflow demonstration, not a visual-generator comparison or an offline-privacy demonstration. The paper's multimodal and recovery limitations remain applicable even when the interface reports a successful text answer.
+
+
+\section{Harbor Evidence and Reproduction}
+\label{app:case}
+\paragraph{Design and identity.}
+The Harbor case is an author-constructed source-scope task, executed on 23 September 2026 using the Windows reviewer package built from \texttt{e6afa5dc}. It is not a historical benchmark rerun or a user study. Both fictional source documents are distributed in full. The generation provider is configured as \texttt{deepseek-v4-flash}, and embeddings as \texttt{text-embedding-3-large}. Strict verification and the heuristic planner are enabled; reranking and visual generation are not used. Both documents are indexed with real embeddings. Separate new conversations avoid history carryover. Only the selected file ID changes between serialized requests; returned effective settings are identical. A credential-free configuration and package/source hashes accompany the records.
+
+\paragraph{Observed execution and answer stages.}
+An observation wrapper around \path{BaseChatOpenAI.stream} retains its text messages and unchanged output chunks. Each captured turn completes one text-provider call; no VLM call or visual-input message occurs. The provider's configured model name is an alias, not a pinned server-side model snapshot. The runtime does not emit a text \path{generation_backend} field for this path, so we report the observed provider call separately rather than filling that field as if the runtime had produced it. The visual-generation gate is not exercised. The wrapper changes neither requests nor returned chunks.
+
+The first model output already explains that the selected operating guide does not specify a duration. Answer processing and strict verification then yield an unknown claim and a generic final refusal. The package retains this transition through \path{pre_verification_answer}, \path{pre_guardrail_answer}, and the displayed answer. It therefore permits inspection of a difference between generated and displayed output, rather than attributing the final refusal directly to the model. The second turn returns the policy's 17-day duration with a supported citation. A supported flag is still a heuristic result; the included source text permits independent inspection of this particular answer.
+
+\paragraph{Offline replay.}
+Unzip the supplementary archive and open \path{case_study/walkthrough.html} for the recorded sequence, or run:
+\begin{verbatim}
+python case_study/verify_case.py
+\end{verbatim}
+This standard-library check requires no API or model download. It verifies file hashes, source text in captured prompts, selected evidence, the single changed request field, equal effective settings, decision outcomes, and retained answer stages. It recomputes EM and token F1 against the published reference using the displayed answer as \path{answer_for_scoring}. Normalization removes numbered citation markers, punctuation, and English articles, lowercases, and collapses whitespace. These are checks on this constructed fixture, not additional benchmark estimates or the historical adapter's score. The replay verifies the captured record; it does not simulate a new model call.
+
+\paragraph{New execution.}
+The separate \path{run_case.py} uses the installed reviewer runtime, an empty output directory, and environment-provided generation/embedding credentials. It indexes the supplied documents and makes real provider calls. It never substitutes stored answers or a model stub. We tested it in a second empty runtime. The operating-guide turn again abstained. With the data policy selected, the model generated the correct duration plus additional explanation; strict verification supported the core claim but falsely classified a policy-supported extension as unsupported, and the final answer was withheld. Full records of this repetition are included under \path{repeat/}. We do not discard that result or claim stable recovery from the first successful pair.
+
+API aliases, nondeterministic generation, and heuristic verification can therefore change the outcome. The package README distinguishes a new execution from the deterministic offline audit. Credentials are excluded, and local absolute paths are replaced with \texttt{<CASE\_ROOT>}; the original answer and evidence strings are retained.
+
+\paragraph{Upstream comparison scope.}
+The upstream source audit uses unmodified Kotaemon commit \texttt{9ad3e4e4}; the package records the full commit hash. Included source excerpts preserve its license and hashes. Its file selector, evidence display, and conversation persistence already support source inspection and reselection. The inspected persistence path stores selected inputs, messages, retrieval messages, plots, and state. We do not claim these capabilities as LMDoc innovations. LMDoc's additional route/retrieval/verification/guardrail fields make the stage distinction in this case explicit. Upstream was not run under the same providers; no measured accuracy, time, or interaction-count advantage is inferred.
+
+The case demonstrates abstention and a user-directed source correction. It does not demonstrate automatic route switching, visual generation, or an exact reconstruction of historical SlideVQA outputs. These remain separate limitations of the evidence.
+
+
+\section{Case Controls and Repair Details}
+\label{app:followup}
+\subsection{Comparator and Supported-Policy Repair}
+The additional records in \path{review_followup/} leave the original \path{case_study/} and historical benchmark archive unchanged. The raw-answer comparator is the actual captured provider text, not a new baseline system run. It already directs the user to the policy. A displayed refusal, the raw answer plus evidence, and the complete stage export provide different observations; we do not infer differences in human accuracy, time, or effort without participants. The static upstream comparison likewise does not measure usefulness.
+
+The explanation rejected during the second Harbor run in a fresh environment is supported: the policy explicitly instructs deletion after 17 days and says it applies to Harbor raw sensor logs. Before repair, the lexical verifier does not match \emph{delete} to \emph{deleted}; the resulting overlap is eight of twelve meaningful tokens, against a nine-token threshold. The repair adds regular \emph{-d/-ed} correspondence without lowering this threshold or removing numerical and negation conflicts. The source patch is against the documented source checkout at commit \texttt{e6afa5dc}, with regression commit \texttt{39d9b248} preceding repair commit \texttt{9472e9e1}. It is a separate candidate source revision, not an assertion that the installed release or historical benchmark already includes the fix.
+
+Replaying the same recorded claims changes the erroneous rejection of the policy explanation to supported. The focused regression includes the recorded explanation, wrong-duration and negated alternatives, and the source without a duration. The relevant verifier/controller suite passes 129 tests. Validation logs, including platform-specific type-check limitations, accompany the patch; these checks do not constitute release-wide revalidation.
+
+We predeclare five repetitions, each using a fresh conversation for the operating guide and the policy. The installed environment loads the patched source, uses the same Deepseek text and OpenAI embedding providers as the initial Harbor case, and indexes the same two files in an isolated application home. All ten runtime responses and provider outputs are retained. Policy-selected turns return the supported 17-day duration in all five repetitions; the guide-only turns abstain in all five. These are repeated observations of one constructed task, not five independent tasks. Moreover, replaying the five new policy claim strings through the unpatched verifier also accepts them. The claim of repair rests on holding the originally rejected strings fixed, not on attributing the new live outcomes solely to the patch. The informative raw explanation can still be replaced by a generic refusal on the missing-policy input; this presentation limitation is not repaired here.
+
+\subsection{A Captured Visual Intervention}
+We use page 9 of the NOAA/NASA annual global analysis for 2023 \citep{noaanasa2024analysis}, rendered without changing its content. Its main chart plots March and September Arctic sea-ice changes. The pink September curve's rightmost value is approximately $-40\%$; a human visual reading fixes a tolerance of $[-42,-38]\%$ before the direct-reading API calls. This is a plotted approximation, not a recovered numerical data series. The one-page PDF excerpt is indexed as page 1, with its original report/page identity retained in the provenance record.
+
+The question is: ``What value does the pink curve reach at the far right of the main chart? Give the approximate plotted value.'' The configured and provider-returned generator is \texttt{gpt-4.1-mini-2025-04-14}. Automatic routing chooses text and returns approximately $-50\%$; fixed text likewise returns $-50\%$. Inspection identifies that neither answer used a visual-provider call. The manual intervention changes only the route policy to page-image in the serialized request, retaining the question, source, models, generation settings, and verification-off setting. The actual visual call contains one rendered image and returns approximately $-40\%$, also retained in the displayed answer. The runtime's legacy adapter identifier \texttt{local\_qwen3\_vl} names its OpenAI-compatible implementation; it is not the model identity. The captured request and provider response identify the actual model. No OCR-first branch or cached visual answer substitutes for this call.
+
+We then remove only the image content part from that exact provider request, preserving its text, model, seed, temperature, and token limit. This generation-only control returns $-50\%$. It is a component ablation, not a third complete retrieval run. The full runtime's text and visual prompts differ; the image-removed control avoids attributing that prompt difference to the pixels. The single observed contrast establishes image-conditioned behavior on this example, without estimating general accuracy, statistical significance, or an automatic recovery rate. Verification is off in every compared runtime condition, so the result is not evidence that the lexical verifier can validate chart values. A deterministic local page selector is used over one preselected page; this does not evaluate learned multimodal retrieval.
+
+All preliminary failures are retained. Before the direct-reading question, a longer question asks for both March and September percentage changes. Its automatic run selects page-image evidence but the required-slot adequacy gate rejects it before generation; no VLM call occurs. That run and a fixed-text attempt are included. An earlier isolated setup attempt also fails indexing because a workspace configuration selects an invalid embedding credential; the failure record is preserved, without credentials. The successful configuration explicitly loads the isolated packaged settings. The direct-reading wording was adopted after the multi-slot failure, and the fixed-visual intervention after observing the erroneous automatic text answer; these are an adaptively constructed walkthrough, not a prespecified benchmark sample. A fresh execution of the distributed chart recipe repeats the text, visual, and image-removed observations; its complete records are also retained. This repeats the same task, not an independent example. The accompanying screencast demonstrates the text-document workflow; the chart intervention is available in the supplementary record viewer.
+
+\subsection{Reproduction and Limits}
+Open \path{review_followup/walkthrough.html}, or run \path{review_followup/verify_followup.py} for an offline integrity and outcome audit. This checks retained records, not new inference. Fresh calls require credentials and may differ. The source patch, inputs, configuration, and live instructions are included; credentials and runtime databases are excluded.
+
+Historical SlideVQA outputs and executed paths remain unavailable; new logs cannot explain the old ties. We retain the numbers without claiming equivalent visual answer quality.

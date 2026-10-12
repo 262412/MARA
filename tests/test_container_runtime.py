@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import subprocess
 import threading
 from contextlib import contextmanager
@@ -134,6 +135,121 @@ def test_container_does_not_force_incompatible_legacy_provider_dependencies():
     assert "WORKDIR /var/lib/mara" in dockerfile
 
 
+def test_final_runtime_base_requires_the_bookworm_pcre2_security_package():
+    dockerfile = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text(
+        encoding="utf-8"
+    )
+    runtime = dockerfile.split(" AS runtime-base\n", 1)[1].split(
+        "\nFROM runtime-base AS runtime-full", 1
+    )[0]
+
+    assert "libpcre2-8-0=10.42-1+deb12u2" in runtime
+    assert "apt-get upgrade" not in runtime
+    assert "dist-upgrade" not in runtime
+
+
+def test_pcre2_probe_records_the_actual_image_and_rejects_evidence_reuse(
+    monkeypatch, tmp_path
+):
+    import hashlib
+    import json
+
+    from scripts import smoke_container_runtime as smoke
+
+    calls = []
+
+    def run(*command, check=True, timeout=None):
+        calls.append((command, timeout))
+        output = '{"checks": {"grep_P": "passed"}}\n'
+        if command[1] == "image":
+            output = "sha256:owned-image\n"
+        return subprocess.CompletedProcess(command, 0, output, "")
+
+    monkeypatch.setattr(smoke, "_run", run)
+    compile(smoke.PCRE2_PROBE, "pcre2-probe", "exec")
+    smoke._check_pcre2("owned-container", "owned-tag", "lite", tmp_path)
+    record = json.loads((tmp_path / "lite.pcre2.json").read_text())
+
+    assert record["image_id"] == "sha256:owned-image"
+    assert (
+        record["probe_sha256"] == hashlib.sha256(smoke.PCRE2_PROBE.encode()).hexdigest()
+    )
+    assert calls[0][0][:3] == ("docker", "exec", "owned-container")
+    assert calls[0][1] == 30
+    with pytest.raises(FileExistsError, match="new evidence directory"):
+        smoke._check_pcre2("owned-container", "owned-tag", "lite", tmp_path)
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("timeout", [False, True])
+def test_pcre2_probe_preserves_failed_output(monkeypatch, tmp_path, timeout):
+    from scripts import smoke_container_runtime as smoke
+
+    def run(*command, **_kwargs):
+        if timeout:
+            raise subprocess.TimeoutExpired(
+                command, 30, output=b"partial identity\n", stderr=b"probe diagnostic\n"
+            )
+        return subprocess.CompletedProcess(
+            command, 1, "partial identity\n", "probe diagnostic\n"
+        )
+
+    monkeypatch.setattr(smoke, "_run", run)
+    error = subprocess.TimeoutExpired if timeout else RuntimeError
+    with pytest.raises(error):
+        smoke._check_pcre2("owned-container", "owned-tag", "lite", tmp_path)
+    assert (tmp_path / "lite.pcre2.stdout").read_text() == "partial identity\n"
+    assert (tmp_path / "lite.pcre2.stderr").read_text() == "probe diagnostic\n"
+    assert not (tmp_path / "lite.pcre2.json").exists()
+
+
+@pytest.mark.parametrize(
+    "verification,has_slim_config,accepted",
+    [
+        ("", False, True),
+        (
+            "missing     /usr/share/doc/libpcre2-8-0/README.Debian\n"
+            "missing     /usr/share/doc/libpcre2-8-0/changelog.Debian.gz\n"
+            "missing     /usr/share/doc/libpcre2-8-0/changelog.gz\n",
+            True,
+            True,
+        ),
+        ("missing /usr/lib/x86_64-linux-gnu/libpcre2-8.so.0.11.2", True, False),
+        ("missing /usr/share/doc/libpcre2-8-0/copyright", True, False),
+        ("??5?????? /usr/share/doc/libpcre2-8-0/changelog.gz", True, False),
+        ("missing /usr/share/doc/libpcre2-8-0/changelog.gz", False, False),
+    ],
+)
+def test_pcre2_verification_allows_only_fixed_slim_doc_exclusions(
+    verification, has_slim_config, accepted
+):
+    from scripts.smoke_container_runtime import PCRE2_PROBE
+
+    # Execute the same validation function sent to the bounded Linux probe.
+    function = next(
+        node
+        for node in ast.parse(PCRE2_PROBE).body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "validate_dpkg_verification"
+    )
+    namespace: dict = {}
+    exec(
+        compile(ast.Module(body=[function], type_ignores=[]), "probe", "exec"),
+        namespace,
+    )
+    validate = namespace["validate_dpkg_verification"]
+    config = (
+        "path-exclude /usr/share/doc/*\npath-include /usr/share/doc/*/copyright\n"
+        if has_slim_config
+        else ""
+    )
+    if accepted:
+        validate(verification, config)
+    else:
+        with pytest.raises(AssertionError):
+            validate(verification, config)
+
+
 def test_prepare_nltk_cache_uses_wheel_bundled_data_without_downloading(tmp_path):
     from scripts.prepare_container_nltk import prepare_nltk_cache
 
@@ -149,6 +265,58 @@ def test_prepare_nltk_cache_uses_wheel_bundled_data_without_downloading(tmp_path
     assert (cache / "tokenizers/punkt").is_dir()
 
 
+def _export_locked_runtime(repo_root: Path, *arguments: str) -> str:
+    completed = subprocess.run(
+        ["uv", "export", "--frozen", "--no-dev", "--no-hashes", *arguments],
+        cwd=repo_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    return completed.stdout
+
+
+@pytest.mark.parametrize("project_path", ("pyproject.toml", "docker/pyproject.toml"))
+def test_runtime_dependency_constraints(project_path):
+    repo_root = Path(__file__).resolve().parents[1]
+    project = tomli.loads((repo_root / project_path).read_text(encoding="utf-8"))
+
+    expected_constraints = {
+        "aiohttp>=3.14.3",
+        "anyio==4.14.2",
+        "cryptography>=50.0.0",
+        "filelock==3.32.7",
+        "fsspec==2026.6.0",
+        "h2>=4.4.1",
+        "httpx2>=2.12.0",
+        "mcp==1.28.1",
+        "oauthlib==4.0.0",
+        "onnx>=1.22.0,<1.23; python_version < '3.13'",
+        "pyarrow==23.0.1",
+        "pydantic-settings==2.14.2",
+        "pywin32==311; sys_platform == 'win32'",
+        "rich==14.1.0",
+        "sentence-transformers==6.0.0",
+        "setuptools==83.0.0",
+        "soupsieve==2.9",
+        "torch==2.13.0",
+        "transformers==5.18.0",
+        "typer==0.19.2",
+        "urllib3==2.8.0",
+        "virtualenv==21.7.13",
+    }
+    if project_path.startswith("docker/"):
+        expected_constraints.remove("pywin32==311; sys_platform == 'win32'")
+    assert set(project["tool"]["uv"]["constraint-dependencies"]) == expected_constraints
+    assert set(project["tool"]["uv"]["build-constraint-dependencies"]) == {
+        "setuptools==83.0.0",
+        "setuptools-git-versioning==2.1.0",
+        "wheel==0.46.2",
+    }
+    assert project["tool"]["uv"]["required-version"] == "==0.11.19"
+
+
 def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
     repo_root = Path(__file__).resolve().parents[1]
     project = tomli.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
@@ -159,28 +327,6 @@ def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
     container_lock = tomli.loads(
         (repo_root / "docker/uv.lock").read_text(encoding="utf-8")
     )
-
-    expected_constraints = {
-        "aiohttp>=3.14.3",
-        "cryptography>=50.0.0",
-        "h2>=4.4.1",
-        "mcp==1.12.4",
-        "onnx>=1.22.0,<1.23; python_version < '3.13'",
-        "pyarrow==21.0.0",
-        "pydantic-settings==2.13.1",
-        "pywin32==311; sys_platform == 'win32'",
-        "rich==14.1.0",
-        "typer==0.19.2",
-    }
-    assert set(project["tool"]["uv"]["constraint-dependencies"]) == (
-        expected_constraints
-    )
-    assert set(project["tool"]["uv"]["build-constraint-dependencies"]) == {
-        "setuptools==80.9.0",
-        "setuptools-git-versioning==2.1.0",
-        "wheel==0.45.1",
-    }
-    assert project["tool"]["uv"]["required-version"] == "==0.11.19"
     packages = lock["package"]
     assert "torch" not in project["tool"]["uv"]["sources"]
     assert container_project["tool"]["uv"]["sources"]["torch"] == {
@@ -191,39 +337,33 @@ def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
     assert any(name.startswith("nvidia-") for name in names)
     assert any(
         package.get("name") == "torch"
-        and package.get("version") == "2.8.0+cpu"
+        and package.get("version") == "2.13.0+cpu"
         and package.get("source", {}).get("registry")
         == "https://download.pytorch.org/whl/cpu"
         for package in container_lock["package"]
     )
     assert any(
         package.get("name") == "torch"
-        and package.get("version") == "2.8.0"
+        and package.get("version") == "2.13.0"
         and package.get("source", {}).get("registry") == "https://pypi.org/simple"
         for package in packages
     )
 
-    def exported(*arguments: str) -> str:
-        completed = subprocess.run(
-            ["uv", "export", "--frozen", "--no-dev", "--no-hashes", *arguments],
-            cwd=repo_root,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        assert completed.returncode == 0, completed.stderr
-        return completed.stdout
+    for gpu_export in (
+        _export_locked_runtime(repo_root),
+        _export_locked_runtime(repo_root, "--extra", "mara"),
+    ):
+        assert "torch==2.13.0\n" in gpu_export
+        assert "torch==2.13.0+cpu" not in gpu_export
+        assert "cuda-toolkit==13.0.3" in gpu_export
+        assert "nvidia-cudnn-cu13" in gpu_export
+        assert "triton==3.7.1" in gpu_export
 
-    for gpu_export in (exported(), exported("--extra", "mara")):
-        assert "torch==2.8.0\n" in gpu_export
-        assert "torch==2.8.0+cpu" not in gpu_export
-        assert "nvidia-cuda-runtime-cu12" in gpu_export
-        assert "triton==3.4.0" in gpu_export
-
-    cpu_export = exported("--project", "docker")
-    assert "torch==2.8.0+cpu" in cpu_export
-    assert "nvidia-cuda-runtime-cu12" not in cpu_export
-    assert "triton==3.4.0" not in cpu_export
+    cpu_export = _export_locked_runtime(repo_root, "--project", "docker")
+    assert "torch==2.13.0+cpu" in cpu_export
+    assert "cuda-toolkit" not in cpu_export
+    assert "nvidia-cudnn-cu13" not in cpu_export
+    assert "triton==3.7.1" not in cpu_export
 
 
 def test_llama_cpp_is_optional_and_not_built_for_container_runtime():
@@ -238,20 +378,22 @@ def test_llama_cpp_is_optional_and_not_built_for_container_runtime():
     assert "llama-cpp" in extras["all"][0]
 
 
-def test_readme_uses_non_root_compatible_volume_and_secret_permissions():
-    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(
-        encoding="utf-8"
-    )
+def test_linked_container_guide_uses_non_root_volume_and_secret_permissions():
+    repo_root = Path(__file__).resolve().parents[1]
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+    guide_path = "docs/development/container-usage.md"
+    assert f"({guide_path})" in readme
+    guide = (repo_root / guide_path).read_text(encoding="utf-8")
 
-    assert "docker volume create mara-data" in readme
-    assert "type=volume,src=mara-data,dst=/var/lib/mara" in readme
-    assert 'install -m 0600 /dev/null "$MARA_SECRET_FILE"' in readme
-    assert 'chmod 0444 "$MARA_SECRET_FILE"' in readme
-    assert "${XDG_RUNTIME_DIR:-/tmp}/mara-secret.XXXXXX" in readme
-    assert "read -rsp 'MARA admin password: ' MARA_ADMIN_PASSWORD" in readme
-    assert "unset MARA_ADMIN_PASSWORD" in readme
-    assert 'trap \'rm -f "$MARA_SECRET_FILE"; rmdir "$MARA_SECRET_DIR"\' EXIT' in readme
-    assert "-v ./ktem_app_data:/var/lib/mara" not in readme
+    assert "docker volume create mara-data" in guide
+    assert "type=volume,src=mara-data,dst=/var/lib/mara" in guide
+    assert 'install -m 0600 /dev/null "$MARA_SECRET_FILE"' in guide
+    assert 'chmod 0444 "$MARA_SECRET_FILE"' in guide
+    assert "${XDG_RUNTIME_DIR:-/tmp}/mara-secret.XXXXXX" in guide
+    assert "read -rsp 'MARA admin password: ' MARA_ADMIN_PASSWORD" in guide
+    assert "unset MARA_ADMIN_PASSWORD" in guide
+    assert 'trap \'rm -f "$MARA_SECRET_FILE"; rmdir "$MARA_SECRET_DIR"\' EXIT' in guide
+    assert "-v ./ktem_app_data:/var/lib/mara" not in guide
 
 
 def test_documented_secret_file_permissions_are_non_root_readable_and_cleaned(
@@ -281,3 +423,44 @@ printf '%s\n' "$MARA_SECRET_DIR" >"$2"
 
     assert completed.returncode == 0, completed.stderr
     assert not Path(marker.read_text(encoding="utf-8").strip()).exists()
+
+
+@pytest.mark.parametrize(
+    ("version", "models", "error"),
+    [("0.31.2", [], None), ("0.0.0", [], "version"), ("0.31.2", {}, "model-list")],
+)
+def test_ollama_probe_checks_release_version_and_model_api(
+    monkeypatch, version, models, error
+):
+    import io
+    import json
+    import urllib.request
+
+    from scripts import smoke_container_runtime as smoke
+
+    requests = []
+    responses = {
+        "http://127.0.0.1:11434/api/version": {"version": version},
+        "http://127.0.0.1:11434/api/tags": {"models": models},
+    }
+
+    def response(url, *, timeout):
+        assert timeout == 5
+        requests.append(url)
+        return io.StringIO(json.dumps(responses[url]))
+
+    def run(*command, check=True, timeout=None):
+        if command[1] == "top":
+            return subprocess.CompletedProcess(command, 0, "1 ollama serve", "")
+        if command[1] == "exec" and command[3] == "/opt/mara/.venv/bin/python":
+            exec(compile(command[-1], "ollama-probe", "exec"), {})
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(urllib.request, "urlopen", response)
+    monkeypatch.setattr(smoke, "_run", run)
+    if error:
+        with pytest.raises(RuntimeError, match=error):
+            smoke._check_runtime("container-id", "ollama")
+    else:
+        smoke._check_runtime("container-id", "ollama")
+        assert requests == list(responses)

@@ -1,67 +1,50 @@
 ---
 name: MARA
-description: Use this skill for the top-level MARA CLI workflow, including multi-step runs that combine command groups such as `MARA doctor`, `MARA inspect`, `MARA review`, `MARA run`, `MARA apply`, `MARA export-pdf`, `MARA chat`, `MARA resume`, `MARA sessions`, `MARA docqa`, `MARA app`, `MARA model`, `MARA platform`, `MARA files`, `MARA read`, `MARA read-slide`, `MARA extract`, `MARA search`, `MARA write`, `MARA delete`, and `MARA shell`.
+description: "Coordinate MARA CLI tasks spanning multiple command groups."
 version: 1.0.0
 ---
 
 # MARA
 
-## Scope
+Coordinate the top-level MARA CLI workflow across command groups.
 
-Use this skill when the user needs the top-level `MARA ...` workflow and the request spans multiple MARA actions.
+Use the focused skill for a single action. For a mixed workflow, load only the
+groups needed for the request:
 
-If `MARA` is not on `PATH`, install the MARA CLI first:
+- Slide/deck inspection, review, rewriting, patches, and PDF export: the matching
+  `MARA-inspect`, `MARA-review`, `MARA-run`, `MARA-apply`, or `MARA-export-pdf` skill.
+- Indexed-document QA, ingestion, notebooks, and conversations: `$MARA-docqa`.
+- Packaged Web UI setup or launch: `$MARA-app`.
+- Shared model routing: `$MARA-model`.
+- Coding-platform support assets: `$MARA-platform`.
+- Workspace files, shell commands, or saved slide sessions: the matching
+  focused `MARA-*` skill.
 
-- `pip install mara-research-cli`
-- or install the packaged runtime with the `MARA` extra
+Use `MARA --help` for the command inventory. If execution is required and the
+CLI is missing, install `mara-research-cli` in the appropriate environment.
+Validate environment and effective configuration before model calls.
+Finish with the requested artifacts or answer and the relevant verification.
 
-## Command Set
-
-- `MARA doctor`
-- `MARA inspect`
-- `MARA review`
-- `MARA run`
-- `MARA apply`
-- `MARA export-pdf`
-- `MARA chat`
-- `MARA sessions`
-- `MARA resume`
-- `MARA docqa`
-- `MARA app`
-- `MARA model`
-- `MARA platform`
-- `MARA files`
-- `MARA read`
-- `MARA read-slide`
-- `MARA extract`
-- `MARA search`
-- `MARA write`
-- `MARA delete`
-- `MARA shell`
-
-## Focused Action Skills
-
-Prefer these focused skills when the user intent is narrow:
-
-- `MARA-apply`
-- `MARA-app`
-- `MARA-export-pdf`
-- `MARA-review`
-- `MARA-doctor`
-- `MARA-inspect`
-- `MARA-run`
-- `MARA-chat`
-- `MARA-sessions`
-- `MARA-resume`
-- `MARA-files`
-- `MARA-read`
-- `MARA-read-slide`
-- `MARA-extract`
-- `MARA-search`
-- `MARA-write`
-- `MARA-delete`
-- `MARA-shell`
-- `MARA-model`
-- `MARA-platform`
-
-Use this umbrella skill when the user needs more than one top-level MARA action in one workflow.
+| Command           | Focused skill     |
+| ----------------- | ----------------- |
+| `MARA doctor`     | `MARA-doctor`     |
+| `MARA inspect`    | `MARA-inspect`    |
+| `MARA read-slide` | `MARA-read-slide` |
+| `MARA extract`    | `MARA-extract`    |
+| `MARA search`     | `MARA-search`     |
+| `MARA review`     | `MARA-review`     |
+| `MARA run`        | `MARA-run`        |
+| `MARA apply`      | `MARA-apply`      |
+| `MARA export-pdf` | `MARA-export-pdf` |
+| `MARA chat`       | `MARA-chat`       |
+| `MARA sessions`   | `MARA-sessions`   |
+| `MARA resume`     | `MARA-resume`     |
+| `MARA files`      | `MARA-files`      |
+| `MARA read`       | `MARA-read`       |
+| `MARA write`      | `MARA-write`      |
+| `MARA delete`     | `MARA-delete`     |
+| `MARA shell`      | `MARA-shell`      |
+| `MARA docqa`      | `MARA-docqa`      |
+| `MARA app`        | `MARA-app`        |
+| `MARA model`      | `MARA-model`      |
+| `MARA platform`   | `MARA-platform`   |

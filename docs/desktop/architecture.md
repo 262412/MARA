@@ -166,13 +166,14 @@ Renderer。Main 再校验 sender、1–64 个绝对且唯一的路径及当前 F
 或本地路径。OpenAPI 生成类型和打包 smoke 同时锁定该契约，避免 Desktop 手写一份
 会与 Web/CLI 漂移的格式列表。
 
-Gate 3 的 Desktop Sidecar 在 runtime settings 初始化前固定
+独立配置下，Desktop Sidecar 在 runtime settings 初始化前固定
 `KH_OFFICE_TO_PDF_INDEXING=false`。自包含包不依赖用户另装 LibreOffice 或
 Microsoft Word，DOCX、XLSX 和 PPTX 索引直接复用 MARA 现有文本读取器。该策略只
 提供可搜索文本，不声称布局保真或 Office 预览已经完成；后续预览切片必须单独检测
-转换器、明确降级并完成格式视觉验收。CLI 和 Web 的默认 Office 转 PDF 策略不变。
+转换器、明确降级并完成格式视觉验收。设置 `MARA_APP_HOME` 的共享配置模式读取
+该配置目录的 Office 策略，与 Web/CLI 使用相同的解析配置。
 
-Gate 3 Desktop runtime 已从“仅索引”收窄升级为只注册 `simple` 问答 reasoning；当前
+独立 Desktop runtime 只注册 `simple` 问答 reasoning；当前
 API 不暴露任意 reasoning、Web search、模型或凭据选择。文件导出 artifact 发布仍关闭，
 因为它依赖 POSIX `dir_fd` 的 fail-closed 安全边界，不能在 Windows 上用普通路径操作
 降级。Desktop 到 Studio/原生导出切片时，必须先实现等价的 Windows 安全文件句柄
@@ -180,7 +181,7 @@ API 不暴露任意 reasoning、Web search、模型或凭据选择。文件导�
 
 ### Desktop 模型路由与凭据
 
-Desktop 模式以 Electron Main 保存的 Chat/Embedding 设置为唯一权威来源。每次保存都
+独立配置模式以 Electron Main 保存的 Chat/Embedding 设置为模型路由来源。每次保存都
 生成新的 settings revision；Main 停止旧 Sidecar 后，以该 revision 的环境快照启动新
 进程，并要求 `/health` 与认证后的 `/v1/doctor` 同时返回精确 revision、Sidecar PID
 和有效 route fingerprint。只看到健康端口不代表设置已经应用，旧启动 Promise 也不能
@@ -202,7 +203,8 @@ Sidecar 在首次 Doctor、索引或问答运行时前执行版本化、幂等�
 Doctor 与每个查询任务只投影实际 route 的 provider、model、settings revision、PID 和
 SHA-256 fingerprint。Renderer 不接收 endpoint、API key、Sidecar token/port、配置路径
 或绝对文件路径。上述 canonical 行为只在 `MARA_DESKTOP_MODEL_SETTINGS=1` 的独立
-Desktop 数据根启用；CLI、Web 与 Gradio 的持久化模型语义保持不变。
+Desktop 数据根启用。设置 `MARA_APP_HOME` 时，启动检查读取共享模型记录，
+不通过默认路由探测覆盖已有 LLM/Embedding 配置；默认值初始化也保留共享配置。
 
 ## 3. Sidecar 生命周期
 
@@ -231,7 +233,7 @@ stateDiagram-v2
 
 ## 4. 数据目录与兼容
 
-### 新安装默认目录
+### 独立配置的默认目录
 
 | 平台    | 数据根目录                                            |
 | ------- | ----------------------------------------------------- |
@@ -252,7 +254,15 @@ MARA/
 ```
 
 Electron Main 在启动 Sidecar 时显式传入数据根目录；Sidecar 再把当前运行时需要的
-`KH_APP_DATA_DIR` 指向兼容子目录。不得依赖当前工作目录或开发机环境变量。
+`KH_APP_DATA_DIR` 指向兼容子目录。
+
+### 共享 Web/CLI 配置
+
+显式设置同一绝对路径 `MARA_APP_HOME` 后，三端读取其 `config/.env` 和
+`config/flowsettings.py`，使用 `KH_APP_DATA_DIR` 或默认的 `MARA_APP_HOME/data`。
+Desktop 自身的窗口状态、任务 journal、日志和缓存位于 `MARA_APP_HOME/desktop`。
+共享模式在设置初始化前加载该配置目录，不受仓库工作目录中的 `flowsettings.py` 抢占。
+使用相同用户与来源选择恢复已有会话；此设置本身不复制或迁移数据。
 
 ### 旧数据迁移
 
@@ -263,8 +273,8 @@ Electron Main 在启动 Sidecar 时显式传入数据根目录；Sidecar 再把�
 5. 原子切换新数据目录；旧目录保持不变。
 6. 提供回滚和“继续使用独立新库”选项。
 
-开发期默认使用独立数据目录。任何双向写入旧 Web/CLI 数据空间的方案都需要
-新的并发、锁和迁移 ADR。
+默认仍使用独立数据目录。共享配置已支持三端依次继续会话；多端同时写入同一会话
+仍需独立验证并发、锁与失败恢复。
 
 ## 5. 自包含打包
 

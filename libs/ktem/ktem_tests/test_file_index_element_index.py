@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 from types import SimpleNamespace
 from typing import Any
 
@@ -133,6 +134,11 @@ def test_index_pipeline_persists_element_and_graph_index_docs(monkeypatch, tmp_p
         },
     )
 
+    monkeypatch.setattr(
+        file_pipelines_module.IndexPipeline,
+        "source_write_scope",
+        lambda _self, _file_id: nullcontext(),
+    )
     pipeline.handle_chunks_docstore([chunk], "file-1")
 
     assert len(docstore.batches) == 3
@@ -181,6 +187,11 @@ def test_index_pipeline_persists_offline_element_records(monkeypatch, tmp_path):
         },
     )
 
+    monkeypatch.setattr(
+        file_pipelines_module.IndexPipeline,
+        "source_write_scope",
+        lambda _self, _file_id: nullcontext(),
+    )
     pipeline.handle_chunks_docstore([chunk], "file-1")
 
     assert len(docstore.batches) == 2

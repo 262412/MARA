@@ -1,0 +1,19 @@
+{
+  "command": [
+    "D:\\MARA-reviewer-test\\20260922T161319Z\\environments\\launcher\\Scripts\\python.exe",
+    "-m",
+    "pip",
+    "index",
+    "versions",
+    "setuptools",
+    "--index-url",
+    "https://pypi.org/simple",
+    "--timeout",
+    "15",
+    "--retries",
+    "0",
+    "--disable-pip-version-check",
+    "-vv"
+  ],
+  "exit_code": 0
+}

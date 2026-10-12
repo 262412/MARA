@@ -277,6 +277,11 @@ def classify_index_failure(error: Exception | str) -> IndexFailureContract:
 
 
 def _desktop_embedding_configurations() -> Mapping[str, Any]:
+    if os.environ.get("MARA_APP_HOME", "").strip():
+        from ktem.embeddings.manager import embedding_models_manager
+
+        return embedding_models_manager.info()
+
     from theflow.settings import settings as flowsettings
 
     configured = getattr(flowsettings, "KH_EMBEDDINGS", {})

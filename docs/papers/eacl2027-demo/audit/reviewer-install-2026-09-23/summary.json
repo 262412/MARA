@@ -1,0 +1,157 @@
+{
+  "checked_at_utc": "2026-09-22T16:35:28.576464+00:00",
+  "local_test_date": "2026-09-23",
+  "release_url": "https://github.com/262412/MARA/releases/tag/v0.0.40",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.10.19",
+  "uv": "0.11.19",
+  "test_root": "D:\\MARA-reviewer-test\\20260922T161319Z",
+  "verdict": "NO-GO for the tested public README installation paths on this Windows host; end-to-end application use not reached.",
+  "checks": {
+    "source_archive_download": "PASS",
+    "release_bootstrap_archive_download_and_digest": "PASS",
+    "pypi_install": "FAIL - no published distribution",
+    "testpypi_fallback_install": "FAIL - no published distribution",
+    "documented_uv_source_install": "FAIL - llama-cpp-python 0.2.7 native build needs unavailable nmake/C/C++ compiler",
+    "launcher_dependency_probe": "INCONCLUSIVE - first dependency-index error, then manual stop after about 359 seconds of retry with repeated metadata-transfer interruptions",
+    "launch": "BLOCKED_NOT_EXECUTED",
+    "index": "BLOCKED_NOT_EXECUTED",
+    "question_answering": "BLOCKED_NOT_EXECUTED",
+    "computer_use": "UNAVAILABLE - Chrome connection error and in-app browser timeout"
+  },
+  "source_archive_sha256": "6e75c2503cd7092c98f78a3875076746f3cdee79e034f429eabf3d36804518bb",
+  "bootstrap_archive_sha256": "711f5348a29d24be5f97a2f0eaf545faafd5c4f89085189221a26d25b440efd0",
+  "original_source_files_unchanged": 1133,
+  "existing_user_data_or_credentials_used": false,
+  "models_downloaded_or_called": false,
+  "software_source_or_release_modified": false,
+  "paper_or_overleaf_artifacts_modified": false,
+  "scope_limits": [
+    "No assertion that Linux/macOS or a Windows host with a configured compiler also fails.",
+    "No assertion that a transport timeout proves the public link is globally broken.",
+    "No assertion that a manually stopped supplementary probe is a software failure.",
+    "The complete batch bootstrap installer was not run; only its dependency installation commands were probed in a separate venv."
+  ],
+  "archived_evidence": [
+    {
+      "original_path": "D:\\MARA-reviewer-test\\20260922T161319Z\\download-check.json",
+      "original_sha256": "bededcfff8c11d11470ae6b73c7cb3d03bf159d3201dc4e58cd4cc883872372c",
+      "archived_name": "download-check.json",
+      "archived_sha256": "f19276b2c97a4df71927cbe03066412156f9245440a225e7dff469acd519c6f8"
+    },
+    {
+      "original_path": "D:\\MARA-reviewer-test\\20260922T161319Z\\source-layout.json",
+      "original_sha256": "950a641d0fa4a7932ded16b97c85abbfe328701c6ec5ab024ddf64c3b0b0f7ab",
+      "archived_name": "source-layout.json",
+      "archived_sha256": "5a16347ba46c861e39ca68ddf66e9964d2d6c2c4e5d4e95c15f8515a3d445991"
+    },
+    {
+      "original_path": "D:\\MARA-reviewer-test\\20260922T161319Z\\pypi-install-check.json",
+      "original_sha256": "14766df4d0495af855e404909ac88361744dbc8bbfd87b2d835b1040360de0c3",
+      "archived_name": "pypi-install-check.json",
+      "archived_sha256": "2eb4ea8c7d24f4133570b908b964bd611d129cd28ffe33df6b4533b2b9e23a48"
+    },
+    {
+      "original_path": "D:\\MARA-reviewer-test\\20260922T161319Z\\testpypi-install-check.json",
+      "original_sha256": "e35818960b17fe386fa44f090820b49ad80e283a6c4529ba5d08da5d553a1cfa",
+      "archived_name": "testpypi-install-check.json",
+      "archived_sha256": "5e9c79b571a4c7d5592e190f23fb31ca70e6a863b77c032350f2243bdc0424f8"
+    },
+    {
+      "original_path": "D:\\MARA-reviewer-test\\20260922T161319Z\\source-install-check.json",
+      "original_sha256": "eb01947a1fe44c7b0c6341d5d7a1c2d98cfd798ff4379dc691d7b89fa14b8e7f",
+      "archived_name": "source-install-check.json",
+      "archived_sha256": "916fb4eb9d8c65e99aa66d07e090ec4960b0e47fc6b475324993ca081c1c1159"
+    },
+    {
+      "original_path": "D:\\MARA-reviewer-test\\20260922T161319Z\\platform-check.json",
+      "original_sha256": "23829eb7eb307d3af6d95630c91f0153f95fce7c48744e5acff0c005ff96b083",
+      "archived_name": "platform-check.json",
+      "archived_sha256": "e5285fff3d6a8ef4247ad9863e1b72bdb2b8bedb18f467841caac6ddd5ed1436"
+    },
+    {
+      "original_path": "D:\\MARA-reviewer-test\\20260922T161319Z\\slide-app-api-check.json",
+      "original_sha256": "d51c8210fe5d2d10aa5ac133745d5bbbce652b1fb1747478df7cc2afed807276",
+      "archived_name": "slide-app-api-check.json",
+      "archived_sha256": "a343b6b20bf3231964cf148c79793e781f87e954c41f3d75c700e4b4e6844125"
+    },
+    {
+      "original_path": "D:\\MARA-reviewer-test\\20260922T161319Z\\slide-app-resume-check.json",
+      "original_sha256": "1867abd1b77cb0717b233fcb5d70c81fb795c1b73fa605e67a4c4e014a9b616f",
+      "archived_name": "slide-app-resume-check.json",
+      "archived_sha256": "cd7e097d01ffbb9341f18fca8eb9a7df276aa21a1a48e2aac405649cc8f42d2e"
+    },
+    {
+      "original_path": "D:\\MARA-reviewer-test\\20260922T161319Z\\slide-app-inspection.json",
+      "original_sha256": "d6f64f9d674d4e81cce92353418deb833daa8dcf0a3857ea191786864d7eb01f",
+      "archived_name": "slide-app-inspection.json",
+      "archived_sha256": "259d993258267cfe3b01c91b8d220fa12f12eade3afd67c242c3e13c6169d107"
+    },
+    {
+      "original_path": "D:\\MARA-reviewer-test\\20260922T161319Z\\launcher-install-check.json",
+      "original_sha256": "6033dd3ff7283db7c4dece6632733d0248d48e67b2458f32cad6b37d6e5a6ea6",
+      "archived_name": "launcher-install-check.json",
+      "archived_sha256": "3b85d5c2aff9729c2690a88362369038bc801e2ccac133c4265023cbb7d43002"
+    },
+    {
+      "original_path": "D:\\MARA-reviewer-test\\20260922T161319Z\\launcher-retry-check.json",
+      "original_sha256": "a671e9791bcae65678d0b6b9273ea1e02d3befb2191b67cf92863a52cd3c6703",
+      "archived_name": "launcher-retry-check.json",
+      "archived_sha256": "affaf85f2d643b4cf9d28daa18e3b1cced3ec4b7c05899c393f089222cfe58e8"
+    },
+    {
+      "original_path": "D:\\MARA-reviewer-test\\20260922T161319Z\\launcher-retry-stop.json",
+      "original_sha256": "51a4319ee4ec0b0c40dea44a5e0bc90b0c98b5509df2008b0c89f42929045b7f",
+      "archived_name": "launcher-retry-stop.json",
+      "archived_sha256": "edb643c922ffa073b906fb47200479d22c8b20b05b976edd66390a22521f9860"
+    },
+    {
+      "original_path": "D:\\MARA-reviewer-test\\20260922T161319Z\\source-integrity-after-install.json",
+      "original_sha256": "79edd15a9c949ee368ef333002275fdcb0dde15fda86c55e68887f379f0ffca8",
+      "archived_name": "source-integrity-after-install.json",
+      "archived_sha256": "79edd15a9c949ee368ef333002275fdcb0dde15fda86c55e68887f379f0ffca8"
+    },
+    {
+      "original_path": "D:\\MARA-reviewer-test\\20260922T161319Z\\qa-test-plan.json",
+      "original_sha256": "e6e7dcef008812632df8cbde15fc9b05039f30ee2e8ee465b2d2029ea6c696f7",
+      "archived_name": "qa-test-plan.json",
+      "archived_sha256": "089d8f122266ec70e07b952348a32dc015e65a46dc44496ed46c4ee7f927a2d6"
+    },
+    {
+      "original_path": "D:\\MARA-reviewer-test\\20260922T161319Z\\pip-index-control-check.json",
+      "original_sha256": "a6f1ba0322ad658b92fe5f8ba1e61f5ecd756f2641b5e3f646cc9f57ff699c38",
+      "archived_name": "pip-index-control-check.json",
+      "archived_sha256": "6045824d00062aec5326ed31d2492bfa443e7d049d0e36b95b0f3042edf053ff"
+    },
+    {
+      "original_path": "D:\\MARA-reviewer-test\\20260922T161319Z\\logs\\pypi-stage-1.log",
+      "original_sha256": "d33b1d500446bc2a94235f1c8de93422102839517756371d660be156fb063a9d",
+      "archived_name": "pypi-stage-1.txt",
+      "archived_sha256": "bfbb800d5a5c082ab74f117b10aeaaa3278a02f746fc57e7df922cc26d45a053"
+    },
+    {
+      "original_path": "D:\\MARA-reviewer-test\\20260922T161319Z\\logs\\testpypi-install.log",
+      "original_sha256": "cf381a9d1b9b3255944027071114489b6ce92276940581ecbc21ec59e7caa6f0",
+      "archived_name": "testpypi-install.txt",
+      "archived_sha256": "739a00b7ecb2d8381fede9b9eeb88a6b74a78d6d6ae3ffcf4dd084b312c4562b"
+    },
+    {
+      "original_path": "D:\\MARA-reviewer-test\\20260922T161319Z\\logs\\source-uv-sync.log",
+      "original_sha256": "6b75fc65fc74835e38a81430b29839dbed1fe028c0d1a4ec5aaf5bdebf30c55e",
+      "archived_name": "source-uv-sync.txt",
+      "archived_sha256": "4a27f42a28dc616269fff29852d45d050a6c035f9911e726cb91bcf335d73802"
+    },
+    {
+      "original_path": "D:\\MARA-reviewer-test\\20260922T161319Z\\logs\\launcher-install-1.log",
+      "original_sha256": "8e49550deb4aa2f409d1eee9896e19391f0ef3b853ce59846ac9301a269e8e49",
+      "archived_name": "launcher-install-1.txt",
+      "archived_sha256": "fd121ef6add7f2c00e8f236f17e81eea23663c41b52b212c5463a97f61030b6c"
+    },
+    {
+      "original_path": "D:\\MARA-reviewer-test\\20260922T161319Z\\logs\\launcher-retry-1.log",
+      "original_sha256": "d82910192c6078f14c1a0d0f0fff74272d615b4c76e23bf6fe5405d3cd7a2770",
+      "archived_name": "launcher-retry-1.txt",
+      "archived_sha256": "ce5cd3b4a8a7b0c3467aa08e2334d4b16d6c433d6803fe319e129c0a3d5b6064"
+    }
+  ]
+}

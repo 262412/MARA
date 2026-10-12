@@ -94,7 +94,7 @@ def test_dockerfile_uses_only_explicit_application_inputs():
     assert "COPY docs" not in dockerfile
     assert "COPY app.py" not in dockerfile
 
-    assert "python:3.10.20-slim-bookworm@sha256:" in dockerfile
+    assert "python:3.11.17-slim-bookworm@sha256:" in dockerfile
     assert "FROM runtime-base AS lite" in dockerfile
     assert "FROM runtime-full AS full" in dockerfile
     assert "FROM runtime-full AS ollama" in dockerfile
@@ -169,4 +169,128 @@ def test_gitleaks_history_baseline_contains_only_exact_triaged_fingerprints():
     assert "useDefault = true" in config
     assert 'id = "mara-promptui-frp-token"' in config
     assert "promptui/tunnel" in config
-    assert "allowlist" not in config.lower()
+    import tomli
+
+    from scripts.supply_chain_contracts import _exact_gitleaks_digest_exception
+
+    assert _exact_gitleaks_digest_exception(tomli.loads(config))
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda c: c["extend"].update(useDefault=False),
+        lambda c: c.update(allowlist={"paths": [".*"]}),
+        lambda c: c["rules"][0].update(allowlists=[{"regexes": [".*"]}]),
+        lambda c: c["rules"][1].update(regex="never-match"),
+        lambda c: c["rules"][1]["allowlists"][0].update(condition="OR"),
+        lambda c: c["rules"][1]["allowlists"][0].update(paths=[".*"]),
+        lambda c: c["rules"][1]["allowlists"][0].update(regexes=[".*"]),
+        lambda c: c["rules"][1]["allowlists"][0].update(regexTarget="line"),
+        lambda c: c["rules"][1]["allowlists"].append({"commits": ["anything"]}),
+    ],
+)
+def test_gitleaks_rejects_broader_exceptions_and_detection_overrides(mutation):
+    import tomli
+
+    from scripts.supply_chain_contracts import _exact_gitleaks_digest_exception
+
+    config = tomli.loads((REPO_ROOT / ".gitleaks.toml").read_text(encoding="utf-8"))
+    mutation(config)
+    assert not _exact_gitleaks_digest_exception(config)
+
+
+def test_gitleaks_digest_exception_matches_only_the_two_observed_paths():
+    import re
+
+    import tomli
+
+    config = tomli.loads((REPO_ROOT / ".gitleaks.toml").read_text(encoding="utf-8"))
+    rule = config["rules"][1]["allowlists"][0]
+    path = "libs/ktem/ktem_tests/test_chat_javascript_resources.py"
+    pattern = rule["paths"][0]
+    assert re.search(pattern, path)
+    assert re.search(pattern, "/repo/" + path)
+    for other in ("other/" + path, "/other/" + path, path + ".bak", path + "/x"):
+        assert not re.search(pattern, other)
+    digest = rule["regexes"][0][1:-1]
+    assert re.search(rule["regexes"][0], digest)
+    assert not re.search(rule["regexes"][0], digest + "0")
+    assert not re.search(rule["regexes"][0], "0" + digest)
+
+
+def test_gitleaks_image_tag_exception_requires_exact_match_and_report_path():
+    import re
+
+    import tomli
+
+    config = tomli.loads((REPO_ROOT / ".gitleaks.toml").read_text(encoding="utf-8"))
+    allowlists = config["rules"][1]["allowlists"]
+    assert len(allowlists) == 3
+    rule = allowlists[1]
+    assert rule["condition"] == "AND"
+    assert rule["regexTarget"] == "match"
+    path = "docs/development/refactor-status.md"
+    for candidate in (path, "/repo/" + path):
+        assert re.search(rule["paths"][0], candidate)
+    for candidate in ("other/" + path, "/other/" + path, path + ".bak"):
+        assert not re.search(rule["paths"][0], candidate)
+    public_commit = "4203ca87cf7f62a84878d231014925e9e90502ce"
+    match = "mara-secret-scan:" + public_commit + "`"
+    assert re.search(rule["regexes"][0], match)
+    for candidate in (
+        match.replace(public_commit, "a" * 40),
+        "service_api_key=" + public_commit,
+        match + "suffix",
+        "prefix" + match,
+    ):
+        assert not re.search(rule["regexes"][0], candidate)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("condition", "OR"),
+        ("regexTarget", "line"),
+        ("paths", [".*"]),
+        ("regexes", [".*"]),
+        ("commits", ["anything"]),
+    ],
+)
+@pytest.mark.parametrize("rule_index", [1, 2])
+def test_gitleaks_rejects_broadening_public_artifact_exceptions(
+    field, value, rule_index
+):
+    import tomli
+
+    from scripts.supply_chain_contracts import _exact_gitleaks_digest_exception
+
+    config = tomli.loads((REPO_ROOT / ".gitleaks.toml").read_text(encoding="utf-8"))
+    assert len(config["rules"][1]["allowlists"]) == 3
+    config["rules"][1]["allowlists"][rule_index][field] = value
+    assert not _exact_gitleaks_digest_exception(config)
+
+
+def test_gitleaks_nltk_exception_requires_verified_digest_and_manifest_path():
+    import json
+    import re
+
+    import tomli
+
+    config = tomli.loads((REPO_ROOT / ".gitleaks.toml").read_text(encoding="utf-8"))
+    rule = config["rules"][1]["allowlists"][2]
+    manifest = json.loads(
+        (REPO_ROOT / "vendor/nltk/base-files.json").read_text(encoding="utf-8")
+    )
+    digests = [pattern[1:-1] for pattern in rule["regexes"]]
+    assert len(digests) == 17
+    assert set(digests) <= set(manifest.values())
+    path = "vendor/nltk/base-files.json"
+    for candidate in (path, "/repo/" + path):
+        assert re.search(rule["paths"][0], candidate)
+    for candidate in ("other/" + path, "/other/" + path, path + ".bak"):
+        assert not re.search(rule["paths"][0], candidate)
+    for digest in digests:
+        assert any(re.search(pattern, digest) for pattern in rule["regexes"])
+        assert not any(re.search(pattern, digest + "0") for pattern in rule["regexes"])
+    assert not any(re.search(pattern, "1" * 64) for pattern in rule["regexes"])

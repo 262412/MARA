@@ -1,0 +1,17 @@
+{
+  "kind": "author-constructed, real-provider diagnostic walkthrough",
+  "historical_benchmark_rerun": false,
+  "question": "For how many days does the Harbor sensor pilot retain raw sensor logs?",
+  "reference_answer": "The Harbor sensor pilot retains raw sensor logs for exactly 17 days.",
+  "reference_source": "inputs/harbor-data-policy.txt",
+  "intervention": "Change selected source only; use separate fresh conversations to avoid history carryover",
+  "expected_request_difference": [
+    "selected_file_ids"
+  ],
+  "recorded_at_utc": "2026-09-23T06:25:25.725224+00:00",
+  "selection": "First completed before/after run; prior attempts failed during runtime setup before model generation",
+  "setup_issues": [
+    "Empty reranker pool was rejected even with reranking disabled; an unused provider entry was configured",
+    "Fixture files were already indexed on repeated setup; existing file ids were reused"
+  ]
+}

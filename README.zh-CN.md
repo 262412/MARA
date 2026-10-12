@@ -48,15 +48,15 @@ Codex 和 Claude Code 集成用于让这些工具调用 MARA，属于[可选集�
 
 | 操作系统 | 源码安装 Web / CLI                             | 桌面发行包                                                       |
 | -------- | ---------------------------------------------- | ---------------------------------------------------------------- |
-| Windows  | PowerShell 安装脚本；Python 3.10               | Windows x64 预览压缩包                                           |
-| Linux    | Bash 安装脚本；Python 3.10                     | Linux x64 预览包，基于 Ubuntu 22.04 构建；验证范围见对应发布说明 |
+| Windows  | PowerShell 安装脚本；Python 3.11               | Windows x64 预览压缩包                                           |
+| Linux    | Bash 安装脚本；Python 3.11                     | Linux x64 预览包，基于 Ubuntu 22.04 构建；验证范围见对应发布说明 |
 | macOS    | 提供 Bash 脚本；本地解析工具和原生依赖需要适配 | 当前打包脚本未提供 macOS 桌面包                                  |
 
 ## 安装 Web 与 CLI
 
 ### 1. 准备环境
 
-安装 [Git](https://git-scm.com/downloads)、本地 **Python 3.10** 和 **uv 0.11.19**。
+安装 [Git](https://git-scm.com/downloads)、本地 **Python 3.11** 和 **uv 0.11.19**。
 uv 版本由当前仓库的 [pyproject.toml](pyproject.toml) 锁定。
 
 安装脚本要求 Python 已经存在，并关闭自动下载 Python。
@@ -65,11 +65,11 @@ uv 版本由当前仓库的 [pyproject.toml](pyproject.toml) 锁定。
 ```shell
 python -m pip install "uv==0.11.19"
 uv --version
-uv python find 3.10
+uv python find 3.11
 ```
 
-Windows 如果 `python` 没有指向 Python 3.10，可以使用 `py -3.10 -m pip`。
-macOS/Linux 的解释器命令也可能是 `python3.10`。
+Windows 如果 `python` 没有指向 Python 3.11，可以使用 `py -3.11 -m pip`。
+macOS/Linux 的解释器命令也可能是 `python3.11`。
 
 首次安装会下载锁定的运行时依赖，可能需要较长时间。
 如果使用远程推理服务，本机不必配备 GPU；本地模型则有各自的内存和显存要求。
@@ -81,7 +81,7 @@ macOS/Linux 的解释器命令也可能是 `python3.10`。
 ### 2. 获取源码并配置模型
 
 ```shell
-git clone https://github.com/262412/MARA.git
+git clone --branch Dev https://github.com/262412/MARA.git
 cd MARA
 ```
 
@@ -126,6 +126,17 @@ KH_OLLAMA_URL=http://localhost:11434/v1/
 
 在 resources 中选择正确的默认 **LLM** 和 **Embedding**。
 填写名称不会自动下载或启动模型。
+
+### 向量服务与已有数据
+
+默认向量库使用 Qdrant 1.19.2 或更新版本的独立服务，供 Web 和 CLI
+共同访问。配置 `MARA_QDRANT_URL`、`MARA_QDRANT_API_KEY` 和稳定的
+`MARA_QDRANT_NAMESPACE`。持久化存储须使用 POSIX 兼容文件系统；Windows
+可以将数据库保存在 WSL2 内部的 Linux 文件系统中。
+
+已有 Chroma 数据需要显式迁移并通过验证，才能由新版运行时打开。先备份完整的
+应用数据目录，并在导出、导入和验证期间保持源应用停止。具体步骤见
+[向量服务与数据迁移说明](docs/development/data-components.md)。
 
 ### 3. 安装锁定的运行时
 
@@ -346,7 +357,7 @@ MARA model run --help
 
 桌面端使用 Electron、React 与内置 Python 服务。
 当前源码已接入原生文件导入、后台索引、文件管理、会话新建/搜索/重命名/删除、
-文档与多文档问答、流式答案、停止和重试。
+文档与多文档问答、流式答案、停止、重试，以及 Resources、Settings、Help 基础页面。
 
 页级/选中文本范围、引用跳转与预览、Notes、Studio、完整资源/设置管理以及数据迁移
 仍有未完成工作。具体进展和验收证据见[功能矩阵](docs/desktop/feature-parity-matrix.md)。
@@ -378,7 +389,6 @@ MARA model run --help
 Windows PowerShell，在仓库根目录执行：
 
 ```powershell
-$env:MARA_DESKTOP_PYTHON = (Resolve-Path .venv\Scripts\python.exe).Path
 cd apps/desktop
 npm ci
 npm start
@@ -387,33 +397,42 @@ npm start
 Linux，在仓库根目录执行：
 
 ```bash
-export MARA_DESKTOP_PYTHON="$PWD/.venv/bin/python"
 cd apps/desktop
 npm ci
 npm start
 ```
 
-`npm start` 会构建应用并启动 Electron。
+`npm start` 会构建应用并启动 Electron，优先使用仓库内已有的 `.venv`。
+需要指定其他已准备好的解释器时，设置 `MARA_DESKTOP_PYTHON`。
 契约验证、测试和原生打包见[桌面开发说明](apps/desktop/README.md)。
 
-桌面端使用独立数据目录：Windows 通常是 `%APPDATA%/MARA`，
-Linux 是 `$XDG_DATA_HOME/MARA` 或 `~/.local/share/MARA`。
-不要假定它会自动打开 Web/CLI 的旧数据库，或支持不同入口同时写入同一份数据。
+需要让 Web、CLI 和桌面端共享配置、索引文件与会话时，在三端启动环境中设置同一个
+绝对路径 `MARA_APP_HOME`。例如在仓库根目录选择已有配置目录：PowerShell 使用
+`$env:MARA_APP_HOME = (Resolve-Path .mara/runtime).Path`，Bash 使用
+`export MARA_APP_HOME="$PWD/.mara/runtime"`，然后启动对应入口。
+继续同一会话时还需使用相同用户与选定来源。
+
+未设置 `MARA_APP_HOME` 时，桌面端仍使用独立数据目录：Windows 通常是
+`%APPDATA%/MARA`，Linux 是 `$XDG_DATA_HOME/MARA` 或 `~/.local/share/MARA`。
+选择共享配置目录不会自动复制旧数据；多端同时写入同一会话尚未验证。
 
 ## 配置与数据保存
 
-| 设置或位置                                        | 用途                                                     |
-| ------------------------------------------------- | -------------------------------------------------------- |
-| 仓库 `.env` 与 [flowsettings.py](flowsettings.py) | 源码工作区的模型默认值和应用设置                         |
-| `MARA app init`                                   | 创建用户级配置模板；`app doctor` 显示实际生效的路径      |
-| 用户配置目录中的 `.env` / `flowsettings.py`       | 没有工作区或显式设置模块覆盖时，供 packaged runtime 使用 |
-| `KH_APP_DATA_DIR`                                 | 覆盖应用数据目录                                         |
-| `modelcli.yml`                                    | `MARA model` 与 Agent 流程的独立 Provider/模型别名配置   |
-| 桌面 Settings 与其数据目录                        | 桌面端负责的模型设置与应用状态                           |
+| 设置或位置                                        | 用途                                                                     |
+| ------------------------------------------------- | ------------------------------------------------------------------------ |
+| 仓库 `.env` 与 [flowsettings.py](flowsettings.py) | 源码工作区的模型默认值和应用设置                                         |
+| `MARA app init`                                   | 创建用户级配置模板；`app doctor` 显示实际生效的路径                      |
+| 用户配置目录中的 `.env` / `flowsettings.py`       | 没有工作区或显式设置模块覆盖时，供 packaged runtime 使用                 |
+| `MARA_APP_HOME`                                   | 共享配置目录：`config/`、默认 `data/`、`cache/`；桌面状态位于 `desktop/` |
+| `KH_APP_DATA_DIR`                                 | 覆盖应用数据目录                                                         |
+| `modelcli.yml`                                    | `MARA model` 与 Agent 流程的独立 Provider/模型别名配置                   |
+| 桌面 Settings 与其数据目录                        | 独立桌面配置目录中的模型设置与应用状态                                   |
 
-运行时会依次检查显式的 `THEFLOW_SETTINGS_MODULE`、工作区 `flowsettings.py`、
-packaged defaults。因此，从仓库内和其他目录执行命令，可能使用不同配置。
-在期望 Web 与 CLI 看到相同文件之前，先比较 `MARA app doctor` 中的
+Web/CLI 运行时依次检查显式的 `THEFLOW_SETTINGS_MODULE`、`MARA_APP_HOME`、
+工作区 `flowsettings.py` 和 packaged defaults。设置 `MARA_APP_HOME` 后，三端读取
+其中的 `config/.env` 与 `config/flowsettings.py`；`KH_APP_DATA_DIR` 可覆盖默认数据目录。
+没有显式配置目录时，从仓库内和其他目录执行命令可能使用不同配置。
+在期望三端看到相同文件之前，先比较 `MARA app doctor` 中的
 **Settings source**、**App data dir** 和 **File storage**。
 
 源码模式默认使用 `ktem_app_data/`。
@@ -506,7 +525,7 @@ MARA 的研究重点是把显式问题需求、集中式路由选择、规范化
 
 | 现象                         | 优先检查                                                         |
 | ---------------------------- | ---------------------------------------------------------------- |
-| uv 版本不匹配或找不到 Python | 使用 uv 0.11.19 和已经安装的 Python 3.10；脚本不会自动下载解释器 |
+| uv 版本不匹配或找不到 Python | 使用 uv 0.11.19 和已经安装的 Python 3.11；脚本不会自动下载解释器 |
 | 安装后找不到 MARA 命令       | 激活正确环境，或使用其完整可执行文件路径                         |
 | UI 能打开但索引失败          | 默认 Embedding、服务地址、密钥与解析器是否正确                   |
 | 修改 .env 没有生效           | 当前设置来源，以及 resources 中已经保存的模型条目                |
@@ -539,13 +558,13 @@ scripts/           验证、打包、安装辅助和 HPC 工具
 在已经准备好测试依赖的主开发环境中，使用不重新同步依赖的验证命令：
 
 ```shell
-uv run --no-sync --python 3.10 python scripts/check_codebase_hygiene.py path/to/changed.py
+uv run --no-sync --python 3.11 python scripts/check_codebase_hygiene.py path/to/changed.py
 ```
 
 修改 CLI 时，在 `libs/slide_cli` 下运行包级验证：
 
 ```shell
-uv run --no-sync --python 3.10 python -m pytest -q
+uv run --no-sync --python 3.11 python -m pytest -q
 ```
 
 不要通过刷新卫生基线掩盖失败。

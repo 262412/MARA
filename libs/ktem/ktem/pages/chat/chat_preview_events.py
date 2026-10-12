@@ -61,6 +61,15 @@ def bind_selected_file_change_event(
 
     ports = chat_preview_ports(page)
     event_chain = page._indices_input[1].change(
+        fn=page.page_preview.refresh_selected_file_preview,
+        inputs=ports.conversation_preview.gradio_inputs,
+        outputs=ports.conversation_preview.gradio_outputs,
+        show_progress="hidden",
+    )
+    _append_context_refresh(
+        event_chain, page, ports, pdfview_js, refresh_page_context_view
+    )
+    event_chain = page._indices_input[1].input(
         fn=page.page_preview.on_selected_file_change,
         inputs=ports.selected_file.gradio_inputs,
         outputs=ports.selected_file.gradio_outputs,
@@ -107,7 +116,7 @@ def bind_page_number_change_event(
     refresh_page_context_view: Callable[..., Any],
 ) -> None:
     ports = chat_preview_ports(page)
-    event_chain = page.chat_panel.page_number.change(
+    event_chain = page.chat_panel.page_number.input(
         fn=page.page_preview.on_page_set,
         inputs=ports.navigation.gradio_inputs,
         outputs=ports.navigation.gradio_outputs,

@@ -345,6 +345,15 @@ def test_same_model_all_true_audit_cannot_promote_a_meta_mention() -> None:
     assert set(slot_refs) == {"actor", "predicate", "object"}
     assert all("text" not in value for value in slot_refs.values())
     assert all(value["text_digest"] for value in slot_refs.values())
+    assert all(value["source_span_ref"] == "P1:quote" for value in slot_refs.values())
+    assert {
+        slot: (value["relative_start"], value["relative_end"])
+        for slot, value in slot_refs.items()
+    } == {
+        "actor": (0, 11),
+        "predicate": (12, 20),
+        "object": (21, 25),
+    }
     assert all(
         value["source_span_ref"] == premise["frozen_span_ref"]
         for value in slot_refs.values()

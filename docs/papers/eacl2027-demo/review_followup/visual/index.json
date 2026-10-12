@@ -1,0 +1,19 @@
+{
+  "successes": [
+    {
+      "file_path": "<RUN_ROOT>\\visual-direct-reading\\arctic-page9.pdf",
+      "file_name": "arctic-page9.pdf",
+      "status": "success"
+    }
+  ],
+  "failures": [],
+  "debug_messages": [
+    "Indexing [1/1]: arctic-page9.pdf",
+    " => Converting arctic-page9.pdf to text",
+    " => Converted arctic-page9.pdf to text (parse cache miss; hits=0, misses=1, writes=1)",
+    " => [arctic-page9.pdf] Processed 2 chunks",
+    " => [arctic-page9.pdf] Created embedding for 2 chunks; cache hits=0, misses=2, writes=2",
+    " => [arctic-page9.pdf] Refreshed vector index (no-op)",
+    " => Finished indexing arctic-page9.pdf"
+  ]
+}

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Union
 
 import requests
-from langchain.utils import get_from_dict_or_env
+from langchain_core.utils import get_from_dict_or_env
 from llama_index.core.readers.base import BaseReader
 from theflow.settings import settings as flowsettings
 

@@ -163,7 +163,12 @@ def test_gradio_injects_control_request_without_component_input_changes(
     control = _control()
     component_inputs = ["conversation-1", "claimed-user"]
 
-    resolved_inputs, _progress_index, _event_data_index = special_args(
+    (
+        resolved_inputs,
+        _progress_index,
+        _event_data_index,
+        _component_props,
+    ) = special_args(
         control.select_conv,
         inputs=list(component_inputs),
         request=password_identity,

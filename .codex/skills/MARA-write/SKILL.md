@@ -1,6 +1,6 @@
 ---
 name: MARA-write
-description: Use this skill for creating and updating workspace files with `MARA write`.
+description: "Create or update workspace files through MARA write."
 version: 1.0.0
 ---
 
@@ -16,4 +16,4 @@ Use this skill when the user wants to create new files or update existing files 
 
 ## Focus
 
-Use this for intentional file mutations only after confirming the target path and desired content.
+Resolve the target path and content from the request and existing context, then perform the authorized write. Ask only when either is ambiguous or overwriting unrelated data would require new authorization.

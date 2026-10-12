@@ -71,6 +71,12 @@ def test_pdf_reader():
 
     langchain_doc = first_doc.to_langchain_format()
     assert isinstance(langchain_doc, LangchainDocument)
+    assert langchain_doc.id == first_doc.doc_id
+    assert langchain_doc.metadata == first_doc.metadata
+    roundtrip = Document.from_langchain_format(langchain_doc)
+    assert roundtrip.doc_id == first_doc.doc_id
+    assert roundtrip.text == first_doc.text
+    assert roundtrip.metadata == first_doc.metadata
 
     # test chunking using NodeParser from llama-index
     node_parser = SimpleNodeParser.from_defaults(chunk_size=100, chunk_overlap=20)

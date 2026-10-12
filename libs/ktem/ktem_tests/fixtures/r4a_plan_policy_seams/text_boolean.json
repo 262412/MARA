@@ -1,0 +1,2682 @@
+{
+ "source": "e40dc0a18ef57d251a2931ce85553e22ee145798",
+ "pythonhashseed": "0",
+ "observation": {
+  "calls": [
+   {
+    "stage": "retrieve",
+    "round": 1,
+    "slot": "",
+    "query": "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+    "route": "text_rag",
+    "budget": {
+     "max_items": 8,
+     "max_pages": 3
+    }
+   },
+   {
+    "stage": "generate",
+    "route": "text_rag"
+   }
+  ],
+  "planned": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:c0843f79acc9fc887577",
+   "answer_type": "boolean",
+   "question_type": "simple_fact",
+   "subqueries": [
+    "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?"
+   ],
+   "evidence_slots": [
+    {
+     "slot_id": "support:boolean_proposition",
+     "role": "support",
+     "entity": "",
+     "metric": "they employ their indexing based method create sample qa wikipedia dataset",
+     "period": "",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "boolean_proposition",
+     "financial_scope": "",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": false,
+     "required_for_execution": false,
+     "required_for_verification": true,
+     "status": "missing",
+     "evidence_ids": [],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+     "locator": {}
+    }
+   ],
+   "constraints": {
+    "periods": [],
+    "verification_domain": "qasper",
+    "requires_visual": false,
+    "requires_multiple_evidence": false,
+    "requires_distinct_source_pages": false,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": []
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": false,
+    "requires_structure": false,
+    "question": "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+    "finance_formula_status": "not_applicable"
+   },
+   "max_retrieval_rounds": 2
+  },
+  "final_plan": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:c0843f79acc9fc887577",
+   "answer_type": "boolean",
+   "question_type": "simple_fact",
+   "subqueries": [
+    "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?"
+   ],
+   "evidence_slots": [
+    {
+     "slot_id": "support:boolean_proposition",
+     "role": "support",
+     "entity": "",
+     "metric": "they employ their indexing based method create sample qa wikipedia dataset",
+     "period": "",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "boolean_proposition",
+     "financial_scope": "",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": false,
+     "required_for_execution": false,
+     "required_for_verification": true,
+     "status": "verified_support",
+     "evidence_ids": [
+      "evidence:paper:direct-abstract"
+     ],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+     "locator": {}
+    }
+   ],
+   "constraints": {
+    "periods": [],
+    "verification_domain": "qasper",
+    "requires_visual": false,
+    "requires_multiple_evidence": false,
+    "requires_distinct_source_pages": false,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": []
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": false,
+    "requires_structure": false,
+    "question": "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+    "finance_formula_status": "not_applicable"
+   },
+   "max_retrieval_rounds": 2
+  },
+  "plan_id": "plan:c0843f79acc9fc887577",
+  "state_version": 2,
+  "bound": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:c0843f79acc9fc887577",
+   "answer_type": "boolean",
+   "question_type": "simple_fact",
+   "subqueries": [
+    "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?"
+   ],
+   "evidence_slots": [
+    {
+     "slot_id": "support:boolean_proposition",
+     "role": "support",
+     "entity": "",
+     "metric": "they employ their indexing based method create sample qa wikipedia dataset",
+     "period": "",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "boolean_proposition",
+     "financial_scope": "",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": false,
+     "required_for_execution": false,
+     "required_for_verification": true,
+     "status": "verified_support",
+     "evidence_ids": [
+      "evidence:paper:direct-abstract"
+     ],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+     "locator": {}
+    }
+   ],
+   "constraints": {
+    "periods": [],
+    "verification_domain": "qasper",
+    "requires_visual": false,
+    "requires_multiple_evidence": false,
+    "requires_distinct_source_pages": false,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": []
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": false,
+    "requires_structure": false,
+    "question": "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+    "finance_formula_status": "not_applicable"
+   },
+   "max_retrieval_rounds": 2,
+   "stage": "verified",
+   "state_version": 2,
+   "state_authority": "verified_claim_support.v1",
+   "authority_projection_contract": "typed_proposition_authority.v1"
+  },
+  "controller": {
+   "route": "text_rag",
+   "legacy_route": "doc_text",
+   "policy": "doc",
+   "controller_mode": "off",
+   "requires_retrieval": true,
+   "reason": "Requested document text route."
+  },
+  "retrieval": {
+   "status": "good",
+   "reason": "Retrieved evidence is sufficient for generation.",
+   "retry": false
+  },
+  "verification": {
+   "mode": "strict",
+   "status": "supported",
+   "reason": "Strict verification requested; current verifier observed evidence.",
+   "action": "generate",
+   "claims": [
+    "yes: Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?"
+   ],
+   "unsupported_claims": [],
+   "unknown_claims": [],
+   "verified_citations": [
+    "evidence:paper:direct-abstract"
+   ],
+   "claim_results": [
+    {
+     "claim_id": "claim:1",
+     "claim": "yes: Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+     "status": "supported",
+     "supporting_evidence_ids": [
+      "evidence:paper:direct-abstract"
+     ],
+     "contradicting_evidence_ids": [],
+     "input_answer_polarity": "yes",
+     "canonical_answer_polarity": "yes",
+     "semantic_correction_applied": false,
+     "authority_status": "exact",
+     "authoritative_evidence_id": "evidence:paper:direct-abstract",
+     "authoritative_evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+     "authoritative_span_id": "evidence:paper:direct-abstract#quote:0:126",
+     "authoritative_quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+     "authoritative_span_start": 0,
+     "authoritative_span_end": 126,
+     "authoritative_canonical_start": null,
+     "authoritative_canonical_end": null,
+     "actor": "current_paper",
+     "section_scope": "experiments",
+     "relation": "use",
+     "object": "dataset indexing method wikipedia",
+     "predicate_arguments": {
+      "__tuple__": [
+       "dataset indexing method wikipedia"
+      ]
+     },
+     "qualifier": "none",
+     "quantifier": "none",
+     "supporting_evidence_spans": [
+      {
+       "evidence_id": "evidence:paper:direct-abstract",
+       "evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+       "span_id": "evidence:paper:direct-abstract#quote:0:126",
+       "quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+       "span_start": 0,
+       "span_end": 126,
+       "canonical_start": null,
+       "canonical_end": null,
+       "actor": "current_paper",
+       "predicate": "use",
+       "section_scope": "experiments",
+       "scope": "experiments",
+       "relation": "use",
+       "object": "dataset indexing method wikipedia",
+       "arguments": [
+        "dataset indexing method wikipedia"
+       ],
+       "quantifier": "none",
+       "polarity": "yes",
+       "qualifier": "none",
+       "reason": "claim_scope_relation_and_polarity_compatible",
+       "source_id": "paper",
+       "page_label": ""
+      }
+     ],
+     "contradicting_evidence_spans": [],
+     "authority_derivations": [],
+     "selected_derivation_id": "",
+     "authoritative_conflict": {},
+     "verified_slot_state": "verified_support",
+     "predicate": "use",
+     "arguments": [
+      "dataset indexing method wikipedia"
+     ],
+     "scope": "experiments",
+     "verified_support_slot_ids": [
+      "support:boolean_proposition"
+     ],
+     "typed_authority_contract": "typed_proposition_authority.v1"
+    }
+   ],
+   "input_answer_polarity": "yes",
+   "canonical_answer_polarity": "yes",
+   "semantic_correction_applied": false,
+   "boolean_authority_status": "verified_support",
+   "authoritative_evidence_id": "evidence:paper:direct-abstract",
+   "authoritative_evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+   "authoritative_span_id": "evidence:paper:direct-abstract#quote:0:126",
+   "authoritative_quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+   "authoritative_span_start": 0,
+   "authoritative_span_end": 126,
+   "authoritative_canonical_start": null,
+   "authoritative_canonical_end": null,
+   "actor": "current_paper",
+   "section_scope": "experiments",
+   "relation": "use",
+   "object": "dataset indexing method wikipedia",
+   "predicate_arguments": {
+    "__tuple__": [
+     "dataset indexing method wikipedia"
+    ]
+   },
+   "qualifier": "none",
+   "quantifier": "none",
+   "verified_support_slot_ids": [
+    "support:boolean_proposition"
+   ],
+   "authority_derivations": [],
+   "selected_derivation_id": "",
+   "authoritative_conflict": {},
+   "typed_authority": {
+    "contract_id": "typed_proposition_authority.v1",
+    "state": "verified_support",
+    "reason": "exact_boolean_proposition",
+    "answer_type": "boolean",
+    "question": "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+    "candidate_answer": "yes",
+    "claim_ids": [
+     "claim:1"
+    ],
+    "required_slot_ids": [
+     "support:boolean_proposition"
+    ],
+    "verified_slot_ids": [
+     "support:boolean_proposition"
+    ],
+    "slot_bindings": {
+     "support:boolean_proposition": [
+      "evidence:paper:direct-abstract"
+     ]
+    },
+    "authority_atoms": [
+     {
+      "evidence_id": "evidence:paper:direct-abstract",
+      "evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+      "span_id": "evidence:paper:direct-abstract#quote:0:126",
+      "quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+      "span_start": 0,
+      "span_end": 126,
+      "canonical_start": null,
+      "canonical_end": null,
+      "actor": "current_paper",
+      "relation": "use",
+      "predicate": "use",
+      "object": "dataset indexing method wikipedia",
+      "arguments": [
+       "dataset indexing method wikipedia"
+      ],
+      "polarity": "yes",
+      "qualifier": "none",
+      "quantifier": "none",
+      "scope": "experiments",
+      "section_scope": "experiments",
+      "proposition_slot_bindings": {},
+      "evidence_relation": "",
+      "source_id": "paper",
+      "page_label": "",
+      "reason": "claim_scope_relation_and_polarity_compatible"
+     }
+    ],
+    "authority_derivations": [],
+    "selected_derivation_id": "",
+    "canonical_answer_polarity": "yes",
+    "query_plan_state_version": 2
+   },
+   "candidate_contract_id": "",
+   "candidate_label": "",
+   "verifier_input_candidate": "",
+   "verifier_candidate_status": "",
+   "replacement_candidate_allowed": false,
+   "predicate": "use",
+   "arguments": [
+    "dataset indexing method wikipedia"
+   ],
+   "scope": "experiments"
+  },
+  "guardrail": {
+   "status": "ok",
+   "action": "return",
+   "reason": "Strict verification requested; current verifier observed evidence."
+  },
+  "answer": "yes",
+  "terminal_answer": "yes",
+  "terminal_state": {
+   "contract_id": "engine_terminal_state.v1",
+   "answer": "yes",
+   "raw_generated_answer": "yes",
+   "raw_candidate_label": "yes",
+   "normalized_candidate_label": "yes",
+   "verified_canonical_answer": "yes",
+   "semantic_correction_applied": false,
+   "correction_reason": "",
+   "authoritative_evidence_id": "evidence:paper:direct-abstract",
+   "authoritative_evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+   "authoritative_quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+   "authoritative_conflict": {},
+   "typed_authority": {
+    "contract_id": "typed_proposition_authority.v1",
+    "state": "verified_support",
+    "reason": "exact_boolean_proposition",
+    "answer_type": "boolean",
+    "question": "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+    "candidate_answer": "yes",
+    "claim_ids": [
+     "claim:1"
+    ],
+    "required_slot_ids": [
+     "support:boolean_proposition"
+    ],
+    "verified_slot_ids": [
+     "support:boolean_proposition"
+    ],
+    "slot_bindings": {
+     "support:boolean_proposition": [
+      "evidence:paper:direct-abstract"
+     ]
+    },
+    "authority_atoms": [
+     {
+      "evidence_id": "evidence:paper:direct-abstract",
+      "evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+      "span_id": "evidence:paper:direct-abstract#quote:0:126",
+      "quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+      "span_start": 0,
+      "span_end": 126,
+      "canonical_start": null,
+      "canonical_end": null,
+      "actor": "current_paper",
+      "relation": "use",
+      "predicate": "use",
+      "object": "dataset indexing method wikipedia",
+      "arguments": [
+       "dataset indexing method wikipedia"
+      ],
+      "polarity": "yes",
+      "qualifier": "none",
+      "quantifier": "none",
+      "scope": "experiments",
+      "section_scope": "experiments",
+      "proposition_slot_bindings": {},
+      "evidence_relation": "",
+      "source_id": "paper",
+      "page_label": "",
+      "reason": "claim_scope_relation_and_polarity_compatible"
+     }
+    ],
+    "authority_derivations": [],
+    "selected_derivation_id": "",
+    "canonical_answer_polarity": "yes",
+    "query_plan_state_version": 2
+   },
+   "terminal_reason": "",
+   "guardrail_result": {
+    "status": "ok",
+    "action": "return",
+    "reason": "Strict verification requested; current verifier observed evidence."
+   },
+   "verify_decision": {
+    "mode": "strict",
+    "status": "supported",
+    "reason": "Strict verification requested; current verifier observed evidence.",
+    "action": "generate",
+    "claims": [
+     "yes: Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?"
+    ],
+    "unsupported_claims": [],
+    "unknown_claims": [],
+    "verified_citations": [
+     "evidence:paper:direct-abstract"
+    ],
+    "claim_results": [
+     {
+      "claim_id": "claim:1",
+      "claim": "yes: Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+      "status": "supported",
+      "supporting_evidence_ids": [
+       "evidence:paper:direct-abstract"
+      ],
+      "contradicting_evidence_ids": [],
+      "input_answer_polarity": "yes",
+      "canonical_answer_polarity": "yes",
+      "semantic_correction_applied": false,
+      "authority_status": "exact",
+      "authoritative_evidence_id": "evidence:paper:direct-abstract",
+      "authoritative_evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+      "authoritative_span_id": "evidence:paper:direct-abstract#quote:0:126",
+      "authoritative_quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+      "authoritative_span_start": 0,
+      "authoritative_span_end": 126,
+      "authoritative_canonical_start": null,
+      "authoritative_canonical_end": null,
+      "actor": "current_paper",
+      "section_scope": "experiments",
+      "relation": "use",
+      "object": "dataset indexing method wikipedia",
+      "predicate_arguments": {
+       "__tuple__": [
+        "dataset indexing method wikipedia"
+       ]
+      },
+      "qualifier": "none",
+      "quantifier": "none",
+      "supporting_evidence_spans": [
+       {
+        "evidence_id": "evidence:paper:direct-abstract",
+        "evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+        "span_id": "evidence:paper:direct-abstract#quote:0:126",
+        "quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+        "span_start": 0,
+        "span_end": 126,
+        "canonical_start": null,
+        "canonical_end": null,
+        "actor": "current_paper",
+        "predicate": "use",
+        "section_scope": "experiments",
+        "scope": "experiments",
+        "relation": "use",
+        "object": "dataset indexing method wikipedia",
+        "arguments": [
+         "dataset indexing method wikipedia"
+        ],
+        "quantifier": "none",
+        "polarity": "yes",
+        "qualifier": "none",
+        "reason": "claim_scope_relation_and_polarity_compatible",
+        "source_id": "paper",
+        "page_label": ""
+       }
+      ],
+      "contradicting_evidence_spans": [],
+      "authority_derivations": [],
+      "selected_derivation_id": "",
+      "authoritative_conflict": {},
+      "verified_slot_state": "verified_support",
+      "predicate": "use",
+      "arguments": [
+       "dataset indexing method wikipedia"
+      ],
+      "scope": "experiments",
+      "verified_support_slot_ids": [
+       "support:boolean_proposition"
+      ],
+      "typed_authority_contract": "typed_proposition_authority.v1"
+     }
+    ],
+    "input_answer_polarity": "yes",
+    "canonical_answer_polarity": "yes",
+    "semantic_correction_applied": false,
+    "boolean_authority_status": "verified_support",
+    "authoritative_evidence_id": "evidence:paper:direct-abstract",
+    "authoritative_evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+    "authoritative_span_id": "evidence:paper:direct-abstract#quote:0:126",
+    "authoritative_quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+    "authoritative_span_start": 0,
+    "authoritative_span_end": 126,
+    "authoritative_canonical_start": null,
+    "authoritative_canonical_end": null,
+    "actor": "current_paper",
+    "section_scope": "experiments",
+    "relation": "use",
+    "object": "dataset indexing method wikipedia",
+    "predicate_arguments": {
+     "__tuple__": [
+      "dataset indexing method wikipedia"
+     ]
+    },
+    "qualifier": "none",
+    "quantifier": "none",
+    "verified_support_slot_ids": [
+     "support:boolean_proposition"
+    ],
+    "authority_derivations": [],
+    "selected_derivation_id": "",
+    "authoritative_conflict": {},
+    "typed_authority": {
+     "contract_id": "typed_proposition_authority.v1",
+     "state": "verified_support",
+     "reason": "exact_boolean_proposition",
+     "answer_type": "boolean",
+     "question": "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+     "candidate_answer": "yes",
+     "claim_ids": [
+      "claim:1"
+     ],
+     "required_slot_ids": [
+      "support:boolean_proposition"
+     ],
+     "verified_slot_ids": [
+      "support:boolean_proposition"
+     ],
+     "slot_bindings": {
+      "support:boolean_proposition": [
+       "evidence:paper:direct-abstract"
+      ]
+     },
+     "authority_atoms": [
+      {
+       "evidence_id": "evidence:paper:direct-abstract",
+       "evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+       "span_id": "evidence:paper:direct-abstract#quote:0:126",
+       "quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+       "span_start": 0,
+       "span_end": 126,
+       "canonical_start": null,
+       "canonical_end": null,
+       "actor": "current_paper",
+       "relation": "use",
+       "predicate": "use",
+       "object": "dataset indexing method wikipedia",
+       "arguments": [
+        "dataset indexing method wikipedia"
+       ],
+       "polarity": "yes",
+       "qualifier": "none",
+       "quantifier": "none",
+       "scope": "experiments",
+       "section_scope": "experiments",
+       "proposition_slot_bindings": {},
+       "evidence_relation": "",
+       "source_id": "paper",
+       "page_label": "",
+       "reason": "claim_scope_relation_and_polarity_compatible"
+      }
+     ],
+     "authority_derivations": [],
+     "selected_derivation_id": "",
+     "canonical_answer_polarity": "yes",
+     "query_plan_state_version": 2
+    },
+    "candidate_contract_id": "",
+    "candidate_label": "",
+    "verifier_input_candidate": "",
+    "verifier_candidate_status": "",
+    "replacement_candidate_allowed": false,
+    "predicate": "use",
+    "arguments": [
+     "dataset indexing method wikipedia"
+    ],
+    "scope": "experiments"
+   },
+   "guardrail_decision": {
+    "status": "ok",
+    "action": "return",
+    "reason": "Strict verification requested; current verifier observed evidence."
+   },
+   "evidence_bundle": {
+    "route": "doc_text",
+    "items": [
+     {
+      "evidence_id": "direct-abstract",
+      "source_id": "paper",
+      "source_name": "",
+      "source_aliases": [
+       "paper"
+      ],
+      "page_label": "",
+      "modality": "text",
+      "element_id": "",
+      "canonical_id": "evidence:paper:direct-abstract",
+      "parent_element_id": "",
+      "neighbor_element_ids": [],
+      "section_id": "abstract",
+      "table_id": "",
+      "row_index": null,
+      "column_index": null,
+      "continuation_id": "",
+      "chunk_start": null,
+      "chunk_end": null,
+      "normalized_text_hash": "f77e5975b7bac4f5f61b4a51f3c77db59ac5dbc0803e703c61d8b1ec73327f63",
+      "duplicate_evidence_ids": [],
+      "retrieval_lineage": [
+       {
+        "round_id": 1,
+        "query_id": "round1:primary",
+        "slot_id": "",
+        "retriever_name": "text",
+        "raw_rank": 1,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       }
+      ],
+      "bbox": null,
+      "caption": "",
+      "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+      "ocr_text": "",
+      "vlm_text": "",
+      "source_backrefs": [
+       "paper#source"
+      ],
+      "evidence_level": "page",
+      "metadata": {},
+      "cell_id": "",
+      "span_id": "",
+      "table_instance_id": null,
+      "table_group_id": null,
+      "block_id": null,
+      "row_label": null,
+      "column_label": null,
+      "period": null,
+      "period_kind": null,
+      "value": null,
+      "unit": null,
+      "scale": null,
+      "currency": null,
+      "statement_kind": null,
+      "financial_scope": null,
+      "representations": [
+       {
+        "modality": "text",
+        "field": "text",
+        "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia."
+       }
+      ],
+      "identity": {
+       "source_id": "paper",
+       "kind": "evidence",
+       "local_id": "direct-abstract"
+      }
+     }
+    ],
+    "metadata": {
+     "evidence": [
+      {
+       "evidence_id": "direct-abstract",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:direct-abstract",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "abstract",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "f77e5975b7bac4f5f61b4a51f3c77db59ac5dbc0803e703c61d8b1ec73327f63",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#source"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "direct-abstract"
+       }
+      }
+     ],
+     "retrieval_query_contracts": [
+      {
+       "contract_id": "initial_retrieval_query.v1",
+       "query_kind": "initial",
+       "round_id": 1,
+       "query_id": "round1:primary",
+       "slot_id": "",
+       "query": "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?"
+      }
+     ],
+     "schema_version": "evidence_bundle.v2",
+     "dedupe_trace": {
+      "schema_version": "evidence_bundle.v2",
+      "input_count": 1,
+      "output_count": 1,
+      "structure_duplicate_count": 0,
+      "exact_text_duplicate_count": 0,
+      "overlap_duplicate_count": 0,
+      "minhash_duplicate_count": 0,
+      "semantic_duplicate_count": 0,
+      "conflict_guard_count": 0,
+      "duplicate_ratio": 0.0
+     },
+     "canonical_candidate_count": 1,
+     "canonical_candidate_evidence": [
+      {
+       "evidence_id": "direct-abstract",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:direct-abstract",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "abstract",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "f77e5975b7bac4f5f61b4a51f3c77db59ac5dbc0803e703c61d8b1ec73327f63",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#source"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "direct-abstract"
+       }
+      }
+     ],
+     "candidate_evidence": [
+      {
+       "evidence_id": "direct-abstract",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:direct-abstract",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "abstract",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "f77e5975b7bac4f5f61b4a51f3c77db59ac5dbc0803e703c61d8b1ec73327f63",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#source"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "direct-abstract"
+       }
+      }
+     ],
+     "candidate_ranked_evidence": [
+      {
+       "evidence_id": "direct-abstract",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:direct-abstract",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "abstract",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "f77e5975b7bac4f5f61b4a51f3c77db59ac5dbc0803e703c61d8b1ec73327f63",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#source"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "direct-abstract"
+       }
+      }
+     ],
+     "candidate_ranking_contract": "global_ranked_v1",
+     "pre_rerank_required_slot_candidates_restored": 0,
+     "reranker_input_evidence": [],
+     "reranker_input_contract": "required_slot_restored.v1",
+     "fused_evidence": [
+      {
+       "evidence_id": "direct-abstract",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:direct-abstract",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "abstract",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "f77e5975b7bac4f5f61b4a51f3c77db59ac5dbc0803e703c61d8b1ec73327f63",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#source"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "direct-abstract"
+       }
+      }
+     ],
+     "fusion_stage_snapshot": {
+      "contract_id": "fusion_stage_snapshot.v1",
+      "route": "doc_text",
+      "state": "passthrough",
+      "candidate_stage": "fusion_passthrough",
+      "reason": "route_does_not_use_cross_modal_fusion",
+      "input_count": 1,
+      "output_count": 1,
+      "input_identities": [
+       "evidence:paper:direct-abstract"
+      ],
+      "output_identities": [
+       "evidence:paper:direct-abstract"
+      ],
+      "identity_preserved": true,
+      "fusion_trace_present": false
+     },
+     "ranking_trace": {
+      "candidate_stage": "fusion_passthrough",
+      "candidate_limit": 1,
+      "candidate_input_count": 1,
+      "input_count": 1,
+      "reranker_input_count": 1,
+      "reranker_scored_count": 0,
+      "output_limit": 30,
+      "output_count": 0,
+      "backend_output_count": 0,
+      "reranker_output_count": 0,
+      "reranker_artifact_record_count": 0,
+      "selection_retained_reranked_count": null,
+      "backend_execution": false,
+      "configured": false,
+      "loaded": false,
+      "executed": false,
+      "backend": "",
+      "model": "",
+      "score_field": "",
+      "input_identities": [],
+      "output_identities": [],
+      "backend_output_identities": [],
+      "failure_reason": "missing_complete_execution_trace",
+      "score_tie_precision_decimals": 6,
+      "tie_breaker": "canonical_evidence_identity",
+      "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+      "fusion_stage_snapshot": {
+       "contract_id": "fusion_stage_snapshot.v1",
+       "route": "doc_text",
+       "state": "passthrough",
+       "candidate_stage": "fusion_passthrough",
+       "reason": "route_does_not_use_cross_modal_fusion",
+       "input_count": 1,
+       "output_count": 1,
+       "input_identities": [
+        "evidence:paper:direct-abstract"
+       ],
+       "output_identities": [
+        "evidence:paper:direct-abstract"
+       ],
+       "identity_preserved": true,
+       "fusion_trace_present": false
+      }
+     },
+     "reranker_aggregate_trace": {
+      "candidate_stage": "fusion_passthrough",
+      "candidate_limit": 1,
+      "candidate_input_count": 1,
+      "input_count": 1,
+      "reranker_input_count": 1,
+      "reranker_scored_count": 0,
+      "output_limit": 30,
+      "output_count": 0,
+      "backend_output_count": 0,
+      "reranker_output_count": 0,
+      "reranker_artifact_record_count": 0,
+      "selection_retained_reranked_count": null,
+      "backend_execution": false,
+      "configured": false,
+      "loaded": false,
+      "executed": false,
+      "backend": "",
+      "model": "",
+      "score_field": "",
+      "input_identities": [],
+      "output_identities": [],
+      "backend_output_identities": [],
+      "failure_reason": "missing_complete_execution_trace",
+      "score_tie_precision_decimals": 6,
+      "tie_breaker": "canonical_evidence_identity",
+      "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+      "fusion_stage_snapshot": {
+       "contract_id": "fusion_stage_snapshot.v1",
+       "route": "doc_text",
+       "state": "passthrough",
+       "candidate_stage": "fusion_passthrough",
+       "reason": "route_does_not_use_cross_modal_fusion",
+       "input_count": 1,
+       "output_count": 1,
+       "input_identities": [
+        "evidence:paper:direct-abstract"
+       ],
+       "output_identities": [
+        "evidence:paper:direct-abstract"
+       ],
+       "identity_preserved": true,
+       "fusion_trace_present": false
+      }
+     },
+     "page_coverage": [],
+     "source_ids": [
+      "paper"
+     ],
+     "evidence_ids": [
+      "direct-abstract"
+     ],
+     "source_page_locators": [],
+     "source_page_alias_locators": [],
+     "modality_counts": {
+      "text": 1
+     },
+     "selected_evidence": [
+      {
+       "evidence_id": "direct-abstract",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:direct-abstract",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "abstract",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "f77e5975b7bac4f5f61b4a51f3c77db59ac5dbc0803e703c61d8b1ec73327f63",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#source"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "direct-abstract"
+       }
+      }
+     ],
+     "generation_context_evidence": [
+      {
+       "evidence_id": "direct-abstract",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:direct-abstract",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "abstract",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "f77e5975b7bac4f5f61b4a51f3c77db59ac5dbc0803e703c61d8b1ec73327f63",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#source"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "direct-abstract"
+       }
+      }
+     ],
+     "used_evidence": [
+      {
+       "evidence_id": "direct-abstract",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:direct-abstract",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "abstract",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "f77e5975b7bac4f5f61b4a51f3c77db59ac5dbc0803e703c61d8b1ec73327f63",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#source"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "direct-abstract"
+       }
+      }
+     ],
+     "stage_aliases": {
+      "used_evidence": "generation_context_evidence"
+     },
+     "query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:c0843f79acc9fc887577",
+      "answer_type": "boolean",
+      "question_type": "simple_fact",
+      "subqueries": [
+       "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?"
+      ],
+      "evidence_slots": [
+       {
+        "slot_id": "support:boolean_proposition",
+        "role": "support",
+        "entity": "",
+        "metric": "they employ their indexing based method create sample qa wikipedia dataset",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "boolean_proposition",
+        "financial_scope": "",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": false,
+        "required_for_execution": false,
+        "required_for_verification": true,
+        "status": "verified_support",
+        "evidence_ids": [
+         "evidence:paper:direct-abstract"
+        ],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+        "locator": {}
+       }
+      ],
+      "constraints": {
+       "periods": [],
+       "verification_domain": "qasper",
+       "requires_visual": false,
+       "requires_multiple_evidence": false,
+       "requires_distinct_source_pages": false,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": []
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": false,
+       "requires_structure": false,
+       "question": "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+       "finance_formula_status": "not_applicable"
+      },
+      "max_retrieval_rounds": 2,
+      "stage": "verified",
+      "state_version": 2,
+      "state_authority": "verified_claim_support.v1",
+      "authority_projection_contract": "typed_proposition_authority.v1"
+     },
+     "query_plan_id": "plan:c0843f79acc9fc887577",
+     "planned_query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:c0843f79acc9fc887577",
+      "answer_type": "boolean",
+      "question_type": "simple_fact",
+      "subqueries": [
+       "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?"
+      ],
+      "evidence_slots": [
+       {
+        "slot_id": "support:boolean_proposition",
+        "role": "support",
+        "entity": "",
+        "metric": "they employ their indexing based method create sample qa wikipedia dataset",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "boolean_proposition",
+        "financial_scope": "",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": false,
+        "required_for_execution": false,
+        "required_for_verification": true,
+        "status": "missing",
+        "evidence_ids": [],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+        "locator": {}
+       }
+      ],
+      "constraints": {
+       "periods": [],
+       "verification_domain": "qasper",
+       "requires_visual": false,
+       "requires_multiple_evidence": false,
+       "requires_distinct_source_pages": false,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": []
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": false,
+       "requires_structure": false,
+       "question": "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+       "finance_formula_status": "not_applicable"
+      },
+      "max_retrieval_rounds": 2,
+      "stage": "planned",
+      "state_version": 0
+     },
+     "bound_query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:c0843f79acc9fc887577",
+      "answer_type": "boolean",
+      "question_type": "simple_fact",
+      "subqueries": [
+       "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?"
+      ],
+      "evidence_slots": [
+       {
+        "slot_id": "support:boolean_proposition",
+        "role": "support",
+        "entity": "",
+        "metric": "they employ their indexing based method create sample qa wikipedia dataset",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "boolean_proposition",
+        "financial_scope": "",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": false,
+        "required_for_execution": false,
+        "required_for_verification": true,
+        "status": "verified_support",
+        "evidence_ids": [
+         "evidence:paper:direct-abstract"
+        ],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+        "locator": {}
+       }
+      ],
+      "constraints": {
+       "periods": [],
+       "verification_domain": "qasper",
+       "requires_visual": false,
+       "requires_multiple_evidence": false,
+       "requires_distinct_source_pages": false,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": []
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": false,
+       "requires_structure": false,
+       "question": "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+       "finance_formula_status": "not_applicable"
+      },
+      "max_retrieval_rounds": 2,
+      "stage": "verified",
+      "state_version": 2,
+      "state_authority": "verified_claim_support.v1",
+      "authority_projection_contract": "typed_proposition_authority.v1"
+     },
+     "evidence_selection_trace": {
+      "strategy": "marginal_evidence_set_selection_v3",
+      "candidate_count": 1,
+      "selected_count": 1,
+      "max_items": 8,
+      "max_pages": 3,
+      "unique_pages": 0,
+      "selected_pages": [],
+      "slot_coverage": null,
+      "missing_required_slot_count": 0,
+      "continuation_expansion_count": 0,
+      "page_modality_expansion_count": 0,
+      "structure_expansion_enabled": false,
+      "mmr_lambda": 0.7,
+      "structure_metadata_coverage": 1.0,
+      "mixed_candidate_structure_metadata_coverage": 1.0,
+      "structure_coverage_scope": "legacy_mixed",
+      "required_slot_candidates_restored": 0,
+      "candidate_budget_partitions": {
+       "factual_narrative": 2,
+       "execution_operands": 0,
+       "parent_tables": 0,
+       "dimensions": 0
+      },
+      "selected_budget_usage": {
+       "factual_narrative": 1,
+       "execution_operands": 0,
+       "parent_tables": 0,
+       "dimensions": 0
+      },
+      "evidence_stage_trace": [
+       {
+        "evidence_id": "evidence:paper:direct-abstract",
+        "retrieved_candidate": true,
+        "selected_in_context": true,
+        "parent_retained": false,
+        "materialized_for_slot_ids": [],
+        "bound_to_slot_ids": [
+         "support:boolean_proposition"
+        ],
+        "executable_operand": false,
+        "verified_support": false,
+        "citation_emitted": false,
+        "stage_scope": "selection"
+       }
+      ],
+      "trace_validation_errors": [],
+      "required_slot_bindings": [
+       {
+        "slot_id": "support:boolean_proposition",
+        "status": "retrieved_unverified",
+        "retrieval_satisfied": true,
+        "execution_satisfied": null,
+        "verification_satisfied": false,
+        "reason": "",
+        "selected_evidence_ids": [
+         "evidence:paper:direct-abstract"
+        ],
+        "best_selected_slot_score": 3.2083333333333335,
+        "candidate_selection_reasons": [
+         {
+          "evidence_id": "evidence:paper:direct-abstract",
+          "reason": "bound_to_slot",
+          "slot_score": 3.2083333333333335
+         }
+        ],
+        "candidate_drop_reasons": []
+       }
+      ],
+      "execution_slot_lineage": [],
+      "relevance_score_contract": "single_stage_per_query_rank_normalized_v2",
+      "boolean_assessment_cache": {
+       "unique_semantic_candidates": 1,
+       "slots": 1,
+       "cache_entries": 1,
+       "cache_builds": 1,
+       "cache_hits": 11,
+       "cache_misses": 0,
+       "classification_calls": 1,
+       "mmr_hot_loop_misses": 0,
+       "time_spent_ms": "elapsed milliseconds"
+      }
+     },
+     "structure_metadata_coverage": 1.0,
+     "slot_coverage": null,
+     "missing_required_slot_count": 0,
+     "second_round_queries": [],
+     "second_round_requests": [],
+     "boolean_assessment_cache": {
+      "unique_semantic_candidates": 1,
+      "slots": 1,
+      "cache_entries": 1,
+      "cache_builds": 1,
+      "cache_hits": 11,
+      "cache_misses": 0,
+      "classification_calls": 1,
+      "mmr_hot_loop_misses": 0,
+      "time_spent_ms": "elapsed milliseconds"
+     },
+     "typed_adequacy_status": "not_applicable",
+     "heuristic_adequacy_status": "good",
+     "final_adequacy_status": "good",
+     "adequacy_decision_authority": "general_heuristic",
+     "heuristic_overridden": false,
+     "heuristic_override_reason": "",
+     "typed_adequacy_reason": "non_finance_domain",
+     "retrieval_rounds": 1,
+     "pre_verification_answer": "yes",
+     "pre_guardrail_answer": "yes",
+     "verified_evidence": [
+      {
+       "evidence_id": "direct-abstract",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:direct-abstract",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "abstract",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "f77e5975b7bac4f5f61b4a51f3c77db59ac5dbc0803e703c61d8b1ec73327f63",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#source"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "direct-abstract"
+       }
+      }
+     ],
+     "verified_claim_support_evidence": [
+      {
+       "evidence_id": "direct-abstract",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:direct-abstract",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "abstract",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "f77e5975b7bac4f5f61b4a51f3c77db59ac5dbc0803e703c61d8b1ec73327f63",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#source"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "direct-abstract"
+       }
+      }
+     ],
+     "verified_claim_support_by_claim": {
+      "claim:1": [
+       "evidence:paper:direct-abstract"
+      ]
+     },
+     "verified_claim_support_spans": [
+      {
+       "evidence_id": "evidence:paper:direct-abstract",
+       "evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+       "span_id": "evidence:paper:direct-abstract#quote:0:126",
+       "quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+       "span_start": 0,
+       "span_end": 126,
+       "canonical_start": null,
+       "canonical_end": null,
+       "actor": "current_paper",
+       "predicate": "use",
+       "section_scope": "experiments",
+       "scope": "experiments",
+       "relation": "use",
+       "object": "dataset indexing method wikipedia",
+       "arguments": [
+        "dataset indexing method wikipedia"
+       ],
+       "quantifier": "none",
+       "polarity": "yes",
+       "qualifier": "none",
+       "reason": "claim_scope_relation_and_polarity_compatible",
+       "source_id": "paper",
+       "page_label": ""
+      }
+     ],
+     "boolean_authority": {
+      "status": "verified_support",
+      "input_answer_polarity": "yes",
+      "canonical_answer_polarity": "yes",
+      "semantic_correction_applied": false,
+      "evidence_id": "evidence:paper:direct-abstract",
+      "evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+      "span_id": "evidence:paper:direct-abstract#quote:0:126",
+      "quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+      "span_start": 0,
+      "span_end": 126,
+      "canonical_start": null,
+      "canonical_end": null,
+      "actor": "current_paper",
+      "section_scope": "experiments",
+      "relation": "use",
+      "object": "dataset indexing method wikipedia",
+      "predicate": "use",
+      "arguments": [
+       "dataset indexing method wikipedia"
+      ],
+      "qualifier": "none",
+      "scope": "experiments",
+      "quantifier": "none",
+      "authority_derivations": [],
+      "selected_derivation_id": ""
+     },
+     "typed_authority": {
+      "contract_id": "typed_proposition_authority.v1",
+      "state": "verified_support",
+      "reason": "exact_boolean_proposition",
+      "answer_type": "boolean",
+      "question": "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+      "candidate_answer": "yes",
+      "claim_ids": [
+       "claim:1"
+      ],
+      "required_slot_ids": [
+       "support:boolean_proposition"
+      ],
+      "verified_slot_ids": [
+       "support:boolean_proposition"
+      ],
+      "slot_bindings": {
+       "support:boolean_proposition": [
+        "evidence:paper:direct-abstract"
+       ]
+      },
+      "authority_atoms": [
+       {
+        "evidence_id": "evidence:paper:direct-abstract",
+        "evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+        "span_id": "evidence:paper:direct-abstract#quote:0:126",
+        "quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+        "span_start": 0,
+        "span_end": 126,
+        "canonical_start": null,
+        "canonical_end": null,
+        "actor": "current_paper",
+        "relation": "use",
+        "predicate": "use",
+        "object": "dataset indexing method wikipedia",
+        "arguments": [
+         "dataset indexing method wikipedia"
+        ],
+        "polarity": "yes",
+        "qualifier": "none",
+        "quantifier": "none",
+        "scope": "experiments",
+        "section_scope": "experiments",
+        "proposition_slot_bindings": {},
+        "evidence_relation": "",
+        "source_id": "paper",
+        "page_label": "",
+        "reason": "claim_scope_relation_and_polarity_compatible"
+       }
+      ],
+      "authority_derivations": [],
+      "selected_derivation_id": "",
+      "canonical_answer_polarity": "yes",
+      "query_plan_state_version": 2
+     },
+     "verification_slot_states": [
+      {
+       "slot_id": "support:boolean_proposition",
+       "status": "verified_support",
+       "evidence_ids": [
+        "evidence:paper:direct-abstract"
+       ]
+      }
+     ],
+     "verify_decision": {
+      "mode": "strict",
+      "status": "supported",
+      "reason": "Strict verification requested; current verifier observed evidence.",
+      "action": "generate",
+      "claims": [
+       "yes: Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?"
+      ],
+      "unsupported_claims": [],
+      "unknown_claims": [],
+      "verified_citations": [
+       "evidence:paper:direct-abstract"
+      ],
+      "claim_results": [
+       {
+        "claim_id": "claim:1",
+        "claim": "yes: Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+        "status": "supported",
+        "supporting_evidence_ids": [
+         "evidence:paper:direct-abstract"
+        ],
+        "contradicting_evidence_ids": [],
+        "input_answer_polarity": "yes",
+        "canonical_answer_polarity": "yes",
+        "semantic_correction_applied": false,
+        "authority_status": "exact",
+        "authoritative_evidence_id": "evidence:paper:direct-abstract",
+        "authoritative_evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+        "authoritative_span_id": "evidence:paper:direct-abstract#quote:0:126",
+        "authoritative_quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+        "authoritative_span_start": 0,
+        "authoritative_span_end": 126,
+        "authoritative_canonical_start": null,
+        "authoritative_canonical_end": null,
+        "actor": "current_paper",
+        "section_scope": "experiments",
+        "relation": "use",
+        "object": "dataset indexing method wikipedia",
+        "predicate_arguments": {
+         "__tuple__": [
+          "dataset indexing method wikipedia"
+         ]
+        },
+        "qualifier": "none",
+        "quantifier": "none",
+        "supporting_evidence_spans": [
+         {
+          "evidence_id": "evidence:paper:direct-abstract",
+          "evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+          "span_id": "evidence:paper:direct-abstract#quote:0:126",
+          "quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+          "span_start": 0,
+          "span_end": 126,
+          "canonical_start": null,
+          "canonical_end": null,
+          "actor": "current_paper",
+          "predicate": "use",
+          "section_scope": "experiments",
+          "scope": "experiments",
+          "relation": "use",
+          "object": "dataset indexing method wikipedia",
+          "arguments": [
+           "dataset indexing method wikipedia"
+          ],
+          "quantifier": "none",
+          "polarity": "yes",
+          "qualifier": "none",
+          "reason": "claim_scope_relation_and_polarity_compatible",
+          "source_id": "paper",
+          "page_label": ""
+         }
+        ],
+        "contradicting_evidence_spans": [],
+        "authority_derivations": [],
+        "selected_derivation_id": "",
+        "authoritative_conflict": {},
+        "verified_slot_state": "verified_support",
+        "predicate": "use",
+        "arguments": [
+         "dataset indexing method wikipedia"
+        ],
+        "scope": "experiments",
+        "verified_support_slot_ids": [
+         "support:boolean_proposition"
+        ],
+        "typed_authority_contract": "typed_proposition_authority.v1"
+       }
+      ],
+      "input_answer_polarity": "yes",
+      "canonical_answer_polarity": "yes",
+      "semantic_correction_applied": false,
+      "boolean_authority_status": "verified_support",
+      "authoritative_evidence_id": "evidence:paper:direct-abstract",
+      "authoritative_evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+      "authoritative_span_id": "evidence:paper:direct-abstract#quote:0:126",
+      "authoritative_quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+      "authoritative_span_start": 0,
+      "authoritative_span_end": 126,
+      "authoritative_canonical_start": null,
+      "authoritative_canonical_end": null,
+      "actor": "current_paper",
+      "section_scope": "experiments",
+      "relation": "use",
+      "object": "dataset indexing method wikipedia",
+      "predicate_arguments": {
+       "__tuple__": [
+        "dataset indexing method wikipedia"
+       ]
+      },
+      "qualifier": "none",
+      "quantifier": "none",
+      "verified_support_slot_ids": [
+       "support:boolean_proposition"
+      ],
+      "authority_derivations": [],
+      "selected_derivation_id": "",
+      "authoritative_conflict": {},
+      "typed_authority": {
+       "contract_id": "typed_proposition_authority.v1",
+       "state": "verified_support",
+       "reason": "exact_boolean_proposition",
+       "answer_type": "boolean",
+       "question": "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+       "candidate_answer": "yes",
+       "claim_ids": [
+        "claim:1"
+       ],
+       "required_slot_ids": [
+        "support:boolean_proposition"
+       ],
+       "verified_slot_ids": [
+        "support:boolean_proposition"
+       ],
+       "slot_bindings": {
+        "support:boolean_proposition": [
+         "evidence:paper:direct-abstract"
+        ]
+       },
+       "authority_atoms": [
+        {
+         "evidence_id": "evidence:paper:direct-abstract",
+         "evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+         "span_id": "evidence:paper:direct-abstract#quote:0:126",
+         "quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+         "span_start": 0,
+         "span_end": 126,
+         "canonical_start": null,
+         "canonical_end": null,
+         "actor": "current_paper",
+         "relation": "use",
+         "predicate": "use",
+         "object": "dataset indexing method wikipedia",
+         "arguments": [
+          "dataset indexing method wikipedia"
+         ],
+         "polarity": "yes",
+         "qualifier": "none",
+         "quantifier": "none",
+         "scope": "experiments",
+         "section_scope": "experiments",
+         "proposition_slot_bindings": {},
+         "evidence_relation": "",
+         "source_id": "paper",
+         "page_label": "",
+         "reason": "claim_scope_relation_and_polarity_compatible"
+        }
+       ],
+       "authority_derivations": [],
+       "selected_derivation_id": "",
+       "canonical_answer_polarity": "yes",
+       "query_plan_state_version": 2
+      },
+      "candidate_contract_id": "",
+      "candidate_label": "",
+      "verifier_input_candidate": "",
+      "verifier_candidate_status": "",
+      "replacement_candidate_allowed": false,
+      "predicate": "use",
+      "arguments": [
+       "dataset indexing method wikipedia"
+      ],
+      "scope": "experiments"
+     },
+     "pipeline_stage_timings": {
+      "planning_seconds": "elapsed seconds",
+      "retrieval_seconds": "elapsed seconds",
+      "generation_seconds": "elapsed seconds",
+      "retry_seconds": "elapsed seconds",
+      "verification_seconds": "elapsed seconds",
+      "finalization_seconds": "elapsed seconds"
+     }
+    }
+   },
+   "terminal_outcome": "answered",
+   "presentation_answer": "yes",
+   "terminal_semantic_commit": {
+    "contract_id": "terminal_semantic_commit.v3",
+    "semantic_answer": "yes",
+    "presentation_answer": "yes",
+    "outcome": "answered",
+    "outcome_reason": "",
+    "answer_status": "answered",
+    "verify_decision": {
+     "mode": "strict",
+     "status": "supported",
+     "reason": "Strict verification requested; current verifier observed evidence.",
+     "action": "generate",
+     "claims": [
+      "yes: Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?"
+     ],
+     "unsupported_claims": [],
+     "unknown_claims": [],
+     "verified_citations": [
+      "evidence:paper:direct-abstract"
+     ],
+     "claim_results": [
+      {
+       "claim_id": "claim:1",
+       "claim": "yes: Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+       "status": "supported",
+       "supporting_evidence_ids": [
+        "evidence:paper:direct-abstract"
+       ],
+       "contradicting_evidence_ids": [],
+       "input_answer_polarity": "yes",
+       "canonical_answer_polarity": "yes",
+       "semantic_correction_applied": false,
+       "authority_status": "exact",
+       "authoritative_evidence_id": "evidence:paper:direct-abstract",
+       "authoritative_evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+       "authoritative_span_id": "evidence:paper:direct-abstract#quote:0:126",
+       "authoritative_quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+       "authoritative_span_start": 0,
+       "authoritative_span_end": 126,
+       "authoritative_canonical_start": null,
+       "authoritative_canonical_end": null,
+       "actor": "current_paper",
+       "section_scope": "experiments",
+       "relation": "use",
+       "object": "dataset indexing method wikipedia",
+       "predicate_arguments": {
+        "__tuple__": [
+         "dataset indexing method wikipedia"
+        ]
+       },
+       "qualifier": "none",
+       "quantifier": "none",
+       "supporting_evidence_spans": [
+        {
+         "evidence_id": "evidence:paper:direct-abstract",
+         "evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+         "span_id": "evidence:paper:direct-abstract#quote:0:126",
+         "quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+         "span_start": 0,
+         "span_end": 126,
+         "canonical_start": null,
+         "canonical_end": null,
+         "actor": "current_paper",
+         "predicate": "use",
+         "section_scope": "experiments",
+         "scope": "experiments",
+         "relation": "use",
+         "object": "dataset indexing method wikipedia",
+         "arguments": [
+          "dataset indexing method wikipedia"
+         ],
+         "quantifier": "none",
+         "polarity": "yes",
+         "qualifier": "none",
+         "reason": "claim_scope_relation_and_polarity_compatible",
+         "source_id": "paper",
+         "page_label": ""
+        }
+       ],
+       "contradicting_evidence_spans": [],
+       "authority_derivations": [],
+       "selected_derivation_id": "",
+       "authoritative_conflict": {},
+       "verified_slot_state": "verified_support",
+       "predicate": "use",
+       "arguments": [
+        "dataset indexing method wikipedia"
+       ],
+       "scope": "experiments",
+       "verified_support_slot_ids": [
+        "support:boolean_proposition"
+       ],
+       "typed_authority_contract": "typed_proposition_authority.v1"
+      }
+     ],
+     "input_answer_polarity": "yes",
+     "canonical_answer_polarity": "yes",
+     "semantic_correction_applied": false,
+     "boolean_authority_status": "verified_support",
+     "authoritative_evidence_id": "evidence:paper:direct-abstract",
+     "authoritative_evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+     "authoritative_span_id": "evidence:paper:direct-abstract#quote:0:126",
+     "authoritative_quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+     "authoritative_span_start": 0,
+     "authoritative_span_end": 126,
+     "authoritative_canonical_start": null,
+     "authoritative_canonical_end": null,
+     "actor": "current_paper",
+     "section_scope": "experiments",
+     "relation": "use",
+     "object": "dataset indexing method wikipedia",
+     "predicate_arguments": {
+      "__tuple__": [
+       "dataset indexing method wikipedia"
+      ]
+     },
+     "qualifier": "none",
+     "quantifier": "none",
+     "verified_support_slot_ids": [
+      "support:boolean_proposition"
+     ],
+     "authority_derivations": [],
+     "selected_derivation_id": "",
+     "authoritative_conflict": {},
+     "typed_authority": {
+      "contract_id": "typed_proposition_authority.v1",
+      "state": "verified_support",
+      "reason": "exact_boolean_proposition",
+      "answer_type": "boolean",
+      "question": "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+      "candidate_answer": "yes",
+      "claim_ids": [
+       "claim:1"
+      ],
+      "required_slot_ids": [
+       "support:boolean_proposition"
+      ],
+      "verified_slot_ids": [
+       "support:boolean_proposition"
+      ],
+      "slot_bindings": {
+       "support:boolean_proposition": [
+        "evidence:paper:direct-abstract"
+       ]
+      },
+      "authority_atoms": [
+       {
+        "evidence_id": "evidence:paper:direct-abstract",
+        "evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+        "span_id": "evidence:paper:direct-abstract#quote:0:126",
+        "quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+        "span_start": 0,
+        "span_end": 126,
+        "canonical_start": null,
+        "canonical_end": null,
+        "actor": "current_paper",
+        "relation": "use",
+        "predicate": "use",
+        "object": "dataset indexing method wikipedia",
+        "arguments": [
+         "dataset indexing method wikipedia"
+        ],
+        "polarity": "yes",
+        "qualifier": "none",
+        "quantifier": "none",
+        "scope": "experiments",
+        "section_scope": "experiments",
+        "proposition_slot_bindings": {},
+        "evidence_relation": "",
+        "source_id": "paper",
+        "page_label": "",
+        "reason": "claim_scope_relation_and_polarity_compatible"
+       }
+      ],
+      "authority_derivations": [],
+      "selected_derivation_id": "",
+      "canonical_answer_polarity": "yes",
+      "query_plan_state_version": 2
+     },
+     "candidate_contract_id": "",
+     "candidate_label": "",
+     "verifier_input_candidate": "",
+     "verifier_candidate_status": "",
+     "replacement_candidate_allowed": false,
+     "predicate": "use",
+     "arguments": [
+      "dataset indexing method wikipedia"
+     ],
+     "scope": "experiments"
+    },
+    "guardrail_decision": {
+     "status": "ok",
+     "action": "return",
+     "reason": "Strict verification requested; current verifier observed evidence."
+    },
+    "authoritative_evidence": [
+     {
+      "evidence_id": "direct-abstract",
+      "source_id": "paper",
+      "source_name": "",
+      "source_aliases": [
+       "paper"
+      ],
+      "page_label": "",
+      "modality": "text",
+      "element_id": "",
+      "canonical_id": "evidence:paper:direct-abstract",
+      "parent_element_id": "",
+      "neighbor_element_ids": [],
+      "section_id": "abstract",
+      "table_id": "",
+      "row_index": null,
+      "column_index": null,
+      "continuation_id": "",
+      "chunk_start": null,
+      "chunk_end": null,
+      "normalized_text_hash": "f77e5975b7bac4f5f61b4a51f3c77db59ac5dbc0803e703c61d8b1ec73327f63",
+      "duplicate_evidence_ids": [],
+      "retrieval_lineage": [
+       {
+        "round_id": 1,
+        "query_id": "round1:primary",
+        "slot_id": "",
+        "retriever_name": "text",
+        "raw_rank": 1,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       }
+      ],
+      "bbox": null,
+      "caption": "",
+      "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+      "ocr_text": "",
+      "vlm_text": "",
+      "source_backrefs": [
+       "paper#source"
+      ],
+      "evidence_level": "page",
+      "metadata": {},
+      "cell_id": "",
+      "span_id": "",
+      "table_instance_id": null,
+      "table_group_id": null,
+      "block_id": null,
+      "row_label": null,
+      "column_label": null,
+      "period": null,
+      "period_kind": null,
+      "value": null,
+      "unit": null,
+      "scale": null,
+      "currency": null,
+      "statement_kind": null,
+      "financial_scope": null,
+      "representations": [
+       {
+        "modality": "text",
+        "field": "text",
+        "text": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia."
+       }
+      ],
+      "identity": {
+       "source_id": "paper",
+       "kind": "evidence",
+       "local_id": "direct-abstract"
+      }
+     }
+    ],
+    "citations": [
+     "evidence:paper:direct-abstract"
+    ],
+    "projection_hash": "e724cd5f271a304cd1aad1964b621f7a26cfa675f505e0b47a3bd15dbcd277be",
+    "state_version": 3
+   }
+  },
+  "terminal_verification": {
+   "mode": "strict",
+   "status": "supported",
+   "reason": "Strict verification requested; current verifier observed evidence.",
+   "action": "generate",
+   "claims": [
+    "yes: Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?"
+   ],
+   "unsupported_claims": [],
+   "unknown_claims": [],
+   "verified_citations": [
+    "evidence:paper:direct-abstract"
+   ],
+   "claim_results": [
+    {
+     "claim_id": "claim:1",
+     "claim": "yes: Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+     "status": "supported",
+     "supporting_evidence_ids": [
+      "evidence:paper:direct-abstract"
+     ],
+     "contradicting_evidence_ids": [],
+     "input_answer_polarity": "yes",
+     "canonical_answer_polarity": "yes",
+     "semantic_correction_applied": false,
+     "authority_status": "exact",
+     "authoritative_evidence_id": "evidence:paper:direct-abstract",
+     "authoritative_evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+     "authoritative_span_id": "evidence:paper:direct-abstract#quote:0:126",
+     "authoritative_quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+     "authoritative_span_start": 0,
+     "authoritative_span_end": 126,
+     "authoritative_canonical_start": null,
+     "authoritative_canonical_end": null,
+     "actor": "current_paper",
+     "section_scope": "experiments",
+     "relation": "use",
+     "object": "dataset indexing method wikipedia",
+     "predicate_arguments": {
+      "__tuple__": [
+       "dataset indexing method wikipedia"
+      ]
+     },
+     "qualifier": "none",
+     "quantifier": "none",
+     "supporting_evidence_spans": [
+      {
+       "evidence_id": "evidence:paper:direct-abstract",
+       "evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+       "span_id": "evidence:paper:direct-abstract#quote:0:126",
+       "quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+       "span_start": 0,
+       "span_end": 126,
+       "canonical_start": null,
+       "canonical_end": null,
+       "actor": "current_paper",
+       "predicate": "use",
+       "section_scope": "experiments",
+       "scope": "experiments",
+       "relation": "use",
+       "object": "dataset indexing method wikipedia",
+       "arguments": [
+        "dataset indexing method wikipedia"
+       ],
+       "quantifier": "none",
+       "polarity": "yes",
+       "qualifier": "none",
+       "reason": "claim_scope_relation_and_polarity_compatible",
+       "source_id": "paper",
+       "page_label": ""
+      }
+     ],
+     "contradicting_evidence_spans": [],
+     "authority_derivations": [],
+     "selected_derivation_id": "",
+     "authoritative_conflict": {},
+     "verified_slot_state": "verified_support",
+     "predicate": "use",
+     "arguments": [
+      "dataset indexing method wikipedia"
+     ],
+     "scope": "experiments",
+     "verified_support_slot_ids": [
+      "support:boolean_proposition"
+     ],
+     "typed_authority_contract": "typed_proposition_authority.v1"
+    }
+   ],
+   "input_answer_polarity": "yes",
+   "canonical_answer_polarity": "yes",
+   "semantic_correction_applied": false,
+   "boolean_authority_status": "verified_support",
+   "authoritative_evidence_id": "evidence:paper:direct-abstract",
+   "authoritative_evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+   "authoritative_span_id": "evidence:paper:direct-abstract#quote:0:126",
+   "authoritative_quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+   "authoritative_span_start": 0,
+   "authoritative_span_end": 126,
+   "authoritative_canonical_start": null,
+   "authoritative_canonical_end": null,
+   "actor": "current_paper",
+   "section_scope": "experiments",
+   "relation": "use",
+   "object": "dataset indexing method wikipedia",
+   "predicate_arguments": {
+    "__tuple__": [
+     "dataset indexing method wikipedia"
+    ]
+   },
+   "qualifier": "none",
+   "quantifier": "none",
+   "verified_support_slot_ids": [
+    "support:boolean_proposition"
+   ],
+   "authority_derivations": [],
+   "selected_derivation_id": "",
+   "authoritative_conflict": {},
+   "typed_authority": {
+    "contract_id": "typed_proposition_authority.v1",
+    "state": "verified_support",
+    "reason": "exact_boolean_proposition",
+    "answer_type": "boolean",
+    "question": "Do they employ their indexing-based method to create a sample of a QA Wikipedia dataset?",
+    "candidate_answer": "yes",
+    "claim_ids": [
+     "claim:1"
+    ],
+    "required_slot_ids": [
+     "support:boolean_proposition"
+    ],
+    "verified_slot_ids": [
+     "support:boolean_proposition"
+    ],
+    "slot_bindings": {
+     "support:boolean_proposition": [
+      "evidence:paper:direct-abstract"
+     ]
+    },
+    "authority_atoms": [
+     {
+      "evidence_id": "evidence:paper:direct-abstract",
+      "evidence_ref": "evidence:paper:direct-abstract#quote:0:126",
+      "span_id": "evidence:paper:direct-abstract#quote:0:126",
+      "quote": "We present an indexing-based method for the creation of a silver-standard answer-retrieval dataset using the entire Wikipedia.",
+      "span_start": 0,
+      "span_end": 126,
+      "canonical_start": null,
+      "canonical_end": null,
+      "actor": "current_paper",
+      "relation": "use",
+      "predicate": "use",
+      "object": "dataset indexing method wikipedia",
+      "arguments": [
+       "dataset indexing method wikipedia"
+      ],
+      "polarity": "yes",
+      "qualifier": "none",
+      "quantifier": "none",
+      "scope": "experiments",
+      "section_scope": "experiments",
+      "proposition_slot_bindings": {},
+      "evidence_relation": "",
+      "source_id": "paper",
+      "page_label": "",
+      "reason": "claim_scope_relation_and_polarity_compatible"
+     }
+    ],
+    "authority_derivations": [],
+    "selected_derivation_id": "",
+    "canonical_answer_polarity": "yes",
+    "query_plan_state_version": 2
+   },
+   "candidate_contract_id": "",
+   "candidate_label": "",
+   "verifier_input_candidate": "",
+   "verifier_candidate_status": "",
+   "replacement_candidate_allowed": false,
+   "predicate": "use",
+   "arguments": [
+    "dataset indexing method wikipedia"
+   ],
+   "scope": "experiments"
+  },
+  "terminal_guardrail": {
+   "status": "ok",
+   "action": "return",
+   "reason": "Strict verification requested; current verifier observed evidence."
+  },
+  "rounds": 1,
+  "recovery": null,
+  "numeric": {
+   "attempt_status": null,
+   "answer": null,
+   "formula": null,
+   "inputs": null,
+   "calculation_execution": null,
+   "calculation_verification": null,
+   "authoritative_query_plan": null
+  }
+ }
+}

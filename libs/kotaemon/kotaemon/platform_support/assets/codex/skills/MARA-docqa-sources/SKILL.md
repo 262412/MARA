@@ -1,6 +1,6 @@
 ---
 name: MARA-docqa-sources
-description: Use when the user wants selected MARA DocQA notebook sources through `MARA docqa sources ...`.
+description: "Manage selected sources in a MARA DocQA notebook."
 version: 1.0.0
 ---
 

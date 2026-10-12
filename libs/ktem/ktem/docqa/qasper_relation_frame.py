@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from .boolean_relations import best_performance_question_subject
+
 _TOKEN_RE = re.compile(r"[a-z0-9]+", re.IGNORECASE)
 _NUMBER_RE = re.compile(
     r"(?<![a-z0-9])(?:\d+(?:\.\d+)?|zero|one|two|three|four|five|six|seven|"
@@ -40,6 +42,8 @@ _PREDICATE_PATTERNS = {
     "collect": r"\bcollect(?:s|ed|ing)?\b",
     "release": r"\breleas(?:e|es|ed|ing)\b",
     "compare": r"\bcompar(?:e|es|ed|ing)\b",
+    "cause": r"\b(?:caus(?:e|es|ed|ing)|drive|drove|driven|reason)\b",
+    "demonstrate": r"\bdemonstrat(?:e|es|ed|ing)\b",
     "analyze": r"\banaly(?:ze|zes|zed|zing|se|ses|sed|sing)\b",
     "explore": r"\bexplor(?:e|es|ed|ing)\b",
     "address": r"\baddress(?:es|ed|ing)?\b",
@@ -67,15 +71,16 @@ def question_relation_frame(question: str) -> QuestionRelationFrame:
     quantifier = _question_quantifier(question)
     object_type = _expected_object_type(question)
     scope = _question_scope(question)
-    qualification = _qualification_frame(
+    special = _special_relation_frame(
+        question,
         lowered,
         actor=actor,
         scope=scope,
         qualifier=qualifier,
         quantifier=quantifier,
     )
-    if qualification is not None:
-        return qualification
+    if special is not None:
+        return special
     for relation_builder in (_account_for_frame, _typed_relation_frame):
         relation = relation_builder(
             lowered,
@@ -159,7 +164,27 @@ def relation_is_explicit(
                 lowered,
             )
         )
+    if frame.relation_kind == "ranking":
+        return bool(
+            re.search(
+                r"\b(?:best\s+performance|rank(?:ed|s|ing)?|"
+                r"second\s+(?:position|place)|behind|below|winner|winning|"
+                r"improv(?:e|es|ed|ing)|scores?)\b",
+                lowered,
+            )
+        )
     predicate_explicit = _predicate_is_explicit(frame.predicate, lowered)
+    if frame.predicate == "use" and re.search(
+        r"\blanguages?\b", frame.expected_object_type, re.IGNORECASE
+    ):
+        return bool(
+            predicate_explicit
+            or re.search(
+                r"\b(?:consist(?:s|ed)?\s+of|compris(?:e|es|ed|ing)|"
+                r"written|spoken|language|from|in)\b",
+                lowered,
+            )
+        )
     if frame.relation_kind == "quantity":
         return bool(
             answer_numbers and answer_numbers <= quote_numbers and predicate_explicit
@@ -167,7 +192,8 @@ def relation_is_explicit(
     if frame.relation_kind == "definition":
         return bool(
             re.search(
-                r"\b(?:mean|represent|refer|denote|define|stand|is|are)\w*\b",
+                r"\b(?:mean|represent|refer|denote|define|stand|is|are|"
+                r"named|called|known)\w*\b|\bnamed\s+as\b",
                 lowered,
             )
         )
@@ -182,7 +208,7 @@ def relation_is_explicit(
     if frame.relation_kind == "method":
         return bool(
             predicate_explicit
-            and re.search(r"\b(?:by|using|through|via|with)\b", lowered)
+            and re.search(r"\b(?:by|use|using|through|via|with)\b", lowered)
         )
     return predicate_explicit
 
@@ -217,6 +243,33 @@ def _frame(
     )
 
 
+def _special_relation_frame(
+    question: str,
+    lowered: str,
+    *,
+    actor: str,
+    scope: str,
+    qualifier: str,
+    quantifier: str,
+) -> QuestionRelationFrame | None:
+    qualification = _qualification_frame(
+        lowered,
+        actor=actor,
+        scope=scope,
+        qualifier=qualifier,
+        quantifier=quantifier,
+    )
+    if qualification is not None:
+        return qualification
+    return _ranking_frame(
+        question,
+        actor=actor,
+        scope=scope,
+        qualifier=qualifier,
+        quantifier=quantifier,
+    )
+
+
 def _qualification_frame(
     question: str,
     *,
@@ -240,6 +293,28 @@ def _qualification_frame(
         qualifier,
         quantifier,
         "qualification",
+    )
+
+
+def _ranking_frame(
+    question: str,
+    *,
+    actor: str,
+    scope: str,
+    qualifier: str,
+    quantifier: str,
+) -> QuestionRelationFrame | None:
+    if not best_performance_question_subject(question):
+        return None
+    return _frame(
+        actor,
+        "rank",
+        "ranking_target",
+        "performance",
+        scope,
+        qualifier,
+        quantifier,
+        "ranking",
     )
 
 
@@ -319,7 +394,8 @@ def _definition_frame(
     quantifier: str,
 ) -> QuestionRelationFrame | None:
     if not re.search(
-        r"\b(?:mean|means|repr?esents?|refer\s+to|denote|define|stand\s+for)\b",
+        r"\b(?:mean|means|repr?esents?|refer\s+to|denote|define|stand\s+for)\b"
+        r"|\b(?:what|which)\s+(?:type|kind|sort)\s+of\b",
         question,
     ):
         return None
@@ -373,7 +449,8 @@ def _predicate_is_explicit(predicate: str, quote: str) -> bool:
         ),
         "novel": (
             _PREDICATE_PATTERNS["novel"],
-            r"\b(?:first|newly\s+introduced|innovation)\b",
+            r"\b(?:first|newly\s+introduced|innovation|overcome|"
+            r"address|solve|circumvent)\w*\b",
         ),
         "baseline": (
             _PREDICATE_PATTERNS["baseline"],
@@ -392,7 +469,8 @@ def _predicate_is_explicit(predicate: str, quote: str) -> bool:
     if predicate in {"cause", "method", "quantify"}:
         patterns = {
             "cause": r"\b(?:because|cause|due\s+to|reason|drive|lead|result)\w*\b",
-            "method": r"\b(?:use|apply|perform|compute|derive)\w*\b",
+            "method": r"\b(?:use|apply|perform|compute|derive|extract|"
+            r"classif(?:y|ies|ied|ying)|detect|measure|analy[sz]e?)\w*\b",
             "quantify": r"\b(?:number|count|total|amount)\w*\b",
         }
         return bool(re.search(patterns[predicate], quote, re.IGNORECASE))

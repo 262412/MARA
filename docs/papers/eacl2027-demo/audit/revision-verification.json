@@ -1,0 +1,109 @@
+{
+  "checked_at_utc": "2026-09-22T03:17:03.015820+00:00",
+  "builds": [
+    {
+      "entry": "main.tex",
+      "exit_code": 0,
+      "pages": 11,
+      "critical_log_findings": [],
+      "underfull_boxes": 16
+    },
+    {
+      "entry": "paper_venue.tex",
+      "exit_code": 0,
+      "pages": 11,
+      "critical_log_findings": [],
+      "underfull_boxes": 16
+    },
+    {
+      "entry": "paper_anonymous.tex",
+      "exit_code": 0,
+      "pages": 11,
+      "critical_log_findings": [],
+      "underfull_boxes": 16
+    }
+  ],
+  "pdf": {
+    "path": "submission/mara-eacl2027-demo.pdf",
+    "sha256": "6de83f41c071ad1bcc384c4ada35c2554dc07f20623667d145d806f535327da0",
+    "pages": 11,
+    "main_content_ends_on_page": 5,
+    "main_content_page_limit": 6,
+    "abstract_words": 150,
+    "page_dimensions_pt": [
+      [
+        595.276,
+        841.89
+      ]
+    ],
+    "embedded_fonts": 16,
+    "all_fonts_embedded": true,
+    "author_names_in_page_and_metadata": [
+      "Chenghao Zhang",
+      "Ke Xu",
+      "Xiao Xiao",
+      "Meng Fang"
+    ],
+    "required_link_annotations_present": [
+      "https://youtu.be/owRaHCzSVNg",
+      "https://github.com/262412/MARA/releases/tag/v0.0.40",
+      "https://github.com/262412/MARA"
+    ],
+    "visually_inspected_pages": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "visual_result": "Readable tables, figures and equations; no clipping, overlaps, or missing content observed."
+  },
+  "official_style_sha256": {
+    "acl.sty": "19dfeddc2c0e448f3926a0bef048a9db3f3611b46265b760caabd7ada4f361de",
+    "acl_natbib.bst": "6fbb306202290f4b68e74ac1460a8b27398500cb6dfeb4492e74c457eae7cd1e"
+  },
+  "original_archive_unchanged": true,
+  "original_archive_sha256": "57517b15761050d80902c5cfeea6244566d67291d26a23b52e27b6b70583b3a1",
+  "numerical_checks": {
+    "records": 3540,
+    "unique_dataset_example_pairs": 1090,
+    "aggregate_cells_reconciled": 360,
+    "win_loss_tie_rows_reconciled": 14,
+    "bootstrap_intervals_reconciled": 14
+  },
+  "public_release_identity": {
+    "github_api_asset_digest_matches": true,
+    "direct_asset_download_completed": false,
+    "benchmark_sha256": "7fabae169ef270dd2e6ee5edd1aa74841f3ffa100f3bf47bb5fa6139f866cafb"
+  },
+  "video": {
+    "url": "https://youtu.be/owRaHCzSVNg",
+    "duration_seconds": 150,
+    "duration_provenance": "Author confirmation",
+    "independent_media_duration_measurement": false,
+    "edited": false
+  },
+  "export_manifest": "submission/artifact-manifest.json",
+  "source_zip_members": 11,
+  "supplement_zip_members": [
+    "mara-full-system-benchmark-synthesis-v0.0.40.zip",
+    "ARTIFACT_GUIDE.md",
+    "REPRODUCTION.md",
+    "revision-evidence.json"
+  ],
+  "zip_checks_passed": true,
+  "not_executed": [
+    "New model experiments",
+    "Clean environment installation and live index/query",
+    "Independent public video playback check",
+    "OpenReview submission",
+    "Git push"
+  ],
+  "source_review_scope": "Tagged source audit and reanalysis of existing release artifacts; no runtime or evaluator changes."
+}

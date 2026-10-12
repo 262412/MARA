@@ -4,8 +4,9 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Optional, cast
 
-from ktem.index.file.archive import extract_supported_zip_files
+from ktem.index.file.archive import OwnedZipInputs, extract_supported_zip_files
 
+from kotaemon.artifact_pipeline import owned_iterator
 from kotaemon.base import Document
 
 from ._runtime_models import DocQAIndexResult
@@ -87,13 +88,12 @@ def index_paths(
 
     resolved_user_id = resolve_user_id(user_id)
     runtime_settings = deepcopy(settings or load_settings(resolved_user_id))
-    expanded_paths = expand_index_inputs(
-        file_index,
-        paths,
-        zip_input_dir=zip_input_dir,
-    )
-    pipeline = file_index.get_indexing_pipeline(runtime_settings, resolved_user_id)
-    return _consume_indexing_stream(pipeline, expanded_paths, reindex)
+    with OwnedZipInputs() as inputs:
+        expanded_paths = inputs.prepare(
+            expand_index_inputs, file_index, paths, zip_input_dir=zip_input_dir
+        )
+        pipeline = file_index.get_indexing_pipeline(runtime_settings, resolved_user_id)
+        return _consume_indexing_stream(pipeline, expanded_paths, reindex)
 
 
 def _supported_file_types(file_index: Any) -> set[str]:
@@ -137,8 +137,9 @@ def _consume_indexing_stream(
     failures: list[dict[str, Any]] = []
     debug_messages: list[str] = []
     index_inputs = cast(list[str | Path], expanded_paths)
-    for response in pipeline.stream(index_inputs, reindex=reindex):
-        _capture_indexing_response(response, successes, failures, debug_messages)
+    with owned_iterator(pipeline.stream(index_inputs, reindex=reindex)) as stream:
+        for response in stream:
+            _capture_indexing_response(response, successes, failures, debug_messages)
     return DocQAIndexResult(
         successes=successes,
         failures=failures,

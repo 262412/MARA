@@ -1,6 +1,6 @@
 ---
 name: MARA-sessions
-description: Use this skill to list saved top-level MARA sessions with `MARA sessions`.
+description: "List saved MARA slide-agent sessions."
 version: 1.0.0
 ---
 

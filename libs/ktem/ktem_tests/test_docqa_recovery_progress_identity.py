@@ -230,6 +230,24 @@ def test_first_semantic_pack_is_a_real_recovery_change() -> None:
     assert recovery_has_progress(fields) is True
 
 
+def test_semantic_reprojection_digest_only_is_not_recovery_progress() -> None:
+    assert (
+        recovery_has_progress(
+            {
+                "new_semantic_evidence_ids": [],
+                "semantic_slot_state_changed": False,
+                "normalized_slot_state_digest_applicable": True,
+                "normalized_slot_state_digest_changed": False,
+                "canonical_proposition_binding_digest_applicable": True,
+                "canonical_proposition_binding_digest_changed": True,
+                "semantic_pack_digest_applicable": True,
+                "semantic_pack_digest_changed": True,
+            }
+        )
+        is False
+    )
+
+
 @pytest.mark.parametrize(
     ("recovery_kind", "change_semantic_pack"),
     (
@@ -239,7 +257,7 @@ def test_first_semantic_pack_is_a_real_recovery_change() -> None:
         ("evidence_retrieval", True),
     ),
 )
-def test_recovery_kind_reverifies_only_after_semantic_pack_digest_changes(
+def test_recovery_kind_reverifies_after_semantic_evidence_changes(
     recovery_kind: str,
     change_semantic_pack: bool,
 ) -> None:

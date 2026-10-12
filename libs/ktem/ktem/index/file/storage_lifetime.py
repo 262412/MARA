@@ -174,7 +174,7 @@ class StorageLifetime:
 
 def _validate_relative(stored_path: str | Path) -> Path:
     relative = Path(stored_path)
-    if not str(relative) or relative.is_absolute() or ".." in relative.parts:
+    if not str(relative) or relative.anchor or ".." in relative.parts:
         raise StorageLifetimeError("stored path must stay inside the storage root")
     if relative == Path("."):
         raise StorageLifetimeError("stored path must identify a file")

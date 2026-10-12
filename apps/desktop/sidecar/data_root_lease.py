@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import threading
 from pathlib import Path
 from typing import BinaryIO
@@ -114,7 +115,7 @@ def _write_all(descriptor: int, payload: bytes) -> None:
 
 
 def _lock_stream(stream: BinaryIO) -> None:
-    if os.name == "nt":
+    if sys.platform == "win32":
         import msvcrt
 
         descriptor = stream.fileno()
@@ -136,7 +137,7 @@ def _lock_stream(stream: BinaryIO) -> None:
 
 
 def _unlock_stream(stream: BinaryIO) -> None:
-    if os.name == "nt":
+    if sys.platform == "win32":
         import msvcrt
 
         descriptor = stream.fileno()

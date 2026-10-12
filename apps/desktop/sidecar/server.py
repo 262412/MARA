@@ -47,7 +47,12 @@ from sidecar.model_routes import settings_revision
 from sidecar.query_manager_factory import create_query_task_manager
 from sidecar.query_routes import register_query_routes
 from sidecar.query_tasks import QueryTaskManager
-from sidecar.server_runtime import apply_smoke_startup_delay, create_loopback_listener
+from sidecar.server_runtime import (
+    apply_smoke_startup_delay,
+    create_loopback_listener,
+    task_manager_lifespan,
+    wait_for_parent_pipe,
+)
 from sidecar.session_routes import register_session_mutation_routes
 from sidecar.smoke_faults import inject_smoke_fault, query_smoke_fault_marker
 from sidecar.task_error_handlers import register_task_exception_handlers
@@ -231,6 +236,7 @@ def create_app(
     if not token:
         raise ValueError("Sidecar token is required")
     app = FastAPI(
+        lifespan=task_manager_lifespan,
         title="MARA Desktop Sidecar",
         version=SIDECAR_VERSION,
         docs_url=None,
@@ -271,8 +277,6 @@ def create_app(
     app.state.query_task_manager = answer_task_manager
     app.state.request_shutdown = None
     app.state.model_settings_revision = settings_revision()
-    app.add_event_handler("shutdown", task_manager.close)
-    app.add_event_handler("shutdown", answer_task_manager.close)
     _register_request_middleware(app)
     _register_exception_handlers(app)
     register_task_exception_handlers(
@@ -502,9 +506,7 @@ def _query_task_journal_path() -> Path | None:
 
 def _watch_parent_pipe(server: uvicorn.Server) -> None:
     try:
-        stdin_fd = sys.stdin.fileno()
-        while os.read(stdin_fd, 1):
-            pass
+        wait_for_parent_pipe(sys.stdin.fileno())
     except OSError:
         pass
     finally:

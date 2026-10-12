@@ -1,8 +1,8 @@
 from typing import List, Optional
 
-from langchain.agents import AgentType as LCAgentType
-from langchain.agents import initialize_agent
-from langchain.agents.agent import AgentExecutor as LCAgentExecutor
+from langchain_classic.agents import AgentType as LCAgentType
+from langchain_classic.agents import initialize_agent
+from langchain_classic.agents.agent import AgentExecutor as LCAgentExecutor
 
 from kotaemon.llms import LLM, ChatLLM
 
